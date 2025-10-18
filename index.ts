@@ -174,7 +174,7 @@ async function main() {
   for (const result of results) {
     const newTitles = result.titles.filter(title => !existingDramas.has(title));
     if (newTitles.length > 0) {
-      newDramasBySource.set(result.source.name, newTitles);
+      newDramasBySource.set(result.source.name ?? result.source.url, newTitles);
       totalNewDramas += newTitles.length;
     }
   }
