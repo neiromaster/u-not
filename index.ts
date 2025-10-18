@@ -7,6 +7,7 @@ const DRAMA_LIST_FILE = 'drama-list.md';
 const CONFIG_FILE = 'config.json';
 
 interface Source {
+  name: string;
   url: string;
   type: 'api';
   jsonPath: string;
@@ -64,23 +65,29 @@ async function getExistingDramas(): Promise<Set<string>> {
   return new Set(dramas);
 }
 
+interface FetchedDramas {
+  source: Source;
+  titles: string[];
+}
+
 /**
  * Загружает и парсит дорамы из одного источника.
  */
-async function fetchDramasFromSource(source: Source): Promise<string[]> {
+async function fetchDramasFromSource(source: Source): Promise<FetchedDramas> {
   try {
     const response = await fetch(source.url);
     if (!response.ok) {
       console.error(`Ошибка при загрузке ${source.url}: ${response.statusText}`);
-      return [];
+      return { source, titles: [] };
     }
     const json = await response.json();
     const titles = JSONPath({path: source.jsonPath, json: json as any});
 
-    return Array.isArray(titles) ? titles.filter(t => typeof t === 'string') : [];
+    const fetchedTitles = Array.isArray(titles) ? titles.filter(t => typeof t === 'string') : [];
+    return { source, titles: fetchedTitles };
   } catch (error) {
     console.error(`Не удалось обработать источник ${source.url}:`, error);
-    return [];
+    return { source, titles: [] };
   }
 }
 
@@ -100,33 +107,42 @@ function getTimestamp(): string {
 /**
  * Добавляет новые дорамы в файл.
  */
-async function appendNewDramas(newDramas: string[]): Promise<void> {
-  const sortedDramas = [...newDramas].sort((a, b) => a.localeCompare(b));
-
+async function appendNewDramas(newDramasBySource: Map<string, string[]>): Promise<void> {
   const timestamp = getTimestamp();
   const existingContent = await Bun.file(DRAMA_LIST_FILE).exists() ? await Bun.file(DRAMA_LIST_FILE).text() : "";
 
   let newSection = `\n## ${timestamp}\n`;
-  newSection += sortedDramas.map(drama => `- ${drama}`).join('\n');
-  newSection += '\n';
+  for (const [sourceName, dramas] of newDramasBySource.entries()) {
+    newSection += `### ${sourceName}\n`;
+    newSection += dramas.map(drama => `- ${drama}`).join('\n');
+    newSection += '\n\n';
+  }
 
   await Bun.write(DRAMA_LIST_FILE, existingContent + newSection);
 
-  console.log(`✨ Найдено и добавлено ${sortedDramas.length} новых дорам:`);
-  sortedDramas.forEach(drama => console.log(`  - ${drama}`));
+  console.log(`✨ Найдено и добавлено ${newDramasBySource.size} источников с новыми дорамами:`);
+  for (const [sourceName, dramas] of newDramasBySource.entries()) {
+    console.log(`  - ${sourceName}: ${dramas.length} дорам`);
+  }
 }
 
 /**
  * Отправляет уведомление в Telegram.
  */
-async function sendTelegramNotification(botToken: string, chatId: string, newDramas: string[]): Promise<void> {
+async function sendTelegramNotification(botToken: string, chatId: string, newDramasBySource: Map<string, string[]>): Promise<void> {
   if (!botToken || !chatId) {
     console.log('🔔 Токен или ID чата для Telegram не указаны, уведомление не будет отправлено.');
     return;
   }
 
   const bot = new Bot(botToken);
-  const message = `<b>✨ Найдены новые дорамы!</b>\n\n${newDramas.map(d => `• ${d}`).join('\n')}`;
+  let message = `<b>✨ Найдены новые дорамы!</b>\n\n`;
+
+  for (const [sourceName, dramas] of newDramasBySource.entries()) {
+    message += `<b>${sourceName}:</b>\n`;
+    message += dramas.map(d => `• ${d}`).join('\n');
+    message += '\n\n';
+  }
 
   try {
     await bot.api.sendMessage(chatId, message, {parse_mode: 'HTML'});
@@ -151,17 +167,25 @@ async function main() {
 
   const fetchPromises = sources.map(fetchDramasFromSource);
   const results = await Promise.all(fetchPromises);
-  const allFetchedDramas = new Set(results.flat().filter(Boolean)); // filter(Boolean) уберет пустые строки
 
-  console.log(`📥 Всего загружено ${allFetchedDramas.size} уникальных названий из всех источников.`);
+  const newDramasBySource = new Map<string, string[]>();
+  let totalNewDramas = 0;
 
-  const newDramas = [...allFetchedDramas].filter(drama => !existingDramas.has(drama));
+  for (const result of results) {
+    const newTitles = result.titles.filter(title => !existingDramas.has(title));
+    if (newTitles.length > 0) {
+      newDramasBySource.set(result.source.name, newTitles);
+      totalNewDramas += newTitles.length;
+    }
+  }
 
-  if (newDramas.length === 0) {
+  console.log(`📥 Всего найдено ${totalNewDramas} новых дорам.`);
+
+  if (totalNewDramas === 0) {
     console.log('✅ Новых дорам не найдено.');
   } else {
-    await appendNewDramas(newDramas);
-    await sendTelegramNotification(telegram.botToken, telegram.chatId, newDramas);
+    await appendNewDramas(newDramasBySource);
+    await sendTelegramNotification(telegram.botToken, telegram.chatId, newDramasBySource);
   }
 
   console.log('🏁 Работа скрипта завершена.');
