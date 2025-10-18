@@ -1,4 +1,5 @@
-import { JSONPath } from 'jsonpath-plus';
+import {JSONPath} from 'jsonpath-plus';
+import {Bot} from 'grammy';
 
 // --- Типы и константы ---
 
@@ -11,22 +12,32 @@ interface Source {
   jsonPath: string;
 }
 
+interface TelegramConfig {
+  botToken: string;
+  chatId: string;
+}
+
+interface Config {
+  sources: Source[];
+  telegram: TelegramConfig;
+}
+
 // --- Логика скрипта ---
 
 /**
  * Загружает конфигурацию из JSON-файла.
  */
-async function loadConfig(): Promise<Source[]> {
+async function loadConfig(): Promise<Config> {
   const file = Bun.file(CONFIG_FILE);
   const exists = await file.exists();
   if (!exists) {
     throw new Error(`Файл конфигурации ${CONFIG_FILE} не найден.`);
   }
   try {
-    const sources: Source[] = await file.json();
-    return sources;
+    const config: Config = await file.json();
+    return config;
   } catch (error) {
-    throw new Error(`Ошибка парсинга ${CONFIG_FILE}. Убедитесь, что это валидный JSON.`, { cause: error });
+    throw new Error(`Ошибка парсинга ${CONFIG_FILE}. Убедитесь, что это валидный JSON.`, {cause: error});
   }
 }
 
@@ -44,7 +55,7 @@ async function getExistingDramas(): Promise<Set<string>> {
 
   const content = await file.text();
   const lines = content.split('\n');
-  
+
   const dramas = lines
     .map(line => line.trim())
     .filter(line => line && !line.startsWith('##') && !line.startsWith('# '))
@@ -64,8 +75,8 @@ async function fetchDramasFromSource(source: Source): Promise<string[]> {
       return [];
     }
     const json = await response.json();
-    const titles = JSONPath({ path: source.jsonPath, json: json as any });
-    
+    const titles = JSONPath({path: source.jsonPath, json: json as any});
+
     return Array.isArray(titles) ? titles.filter(t => typeof t === 'string') : [];
   } catch (error) {
     console.error(`Не удалось обработать источник ${source.url}:`, error);
@@ -91,7 +102,7 @@ function getTimestamp(): string {
  */
 async function appendNewDramas(newDramas: string[]): Promise<void> {
   const sortedDramas = [...newDramas].sort((a, b) => a.localeCompare(b));
-  
+
   const timestamp = getTimestamp();
   const existingContent = await Bun.file(DRAMA_LIST_FILE).exists() ? await Bun.file(DRAMA_LIST_FILE).text() : "";
 
@@ -100,9 +111,29 @@ async function appendNewDramas(newDramas: string[]): Promise<void> {
   newSection += '\n';
 
   await Bun.write(DRAMA_LIST_FILE, existingContent + newSection);
-  
+
   console.log(`✨ Найдено и добавлено ${sortedDramas.length} новых дорам:`);
   sortedDramas.forEach(drama => console.log(`  - ${drama}`));
+}
+
+/**
+ * Отправляет уведомление в Telegram.
+ */
+async function sendTelegramNotification(botToken: string, chatId: string, newDramas: string[]): Promise<void> {
+  if (!botToken || !chatId) {
+    console.log('🔔 Токен или ID чата для Telegram не указаны, уведомление не будет отправлено.');
+    return;
+  }
+
+  const bot = new Bot(botToken);
+  const message = `<b>✨ Найдены новые дорамы!</b>\n\n${newDramas.map(d => `• ${d}`).join('\n')}`;
+
+  try {
+    await bot.api.sendMessage(chatId, message, {parse_mode: 'HTML'});
+    console.log('📤 Уведомление в Telegram успешно отправлено.');
+  } catch (error) {
+    console.error('❌ Ошибка при отправке уведомления в Telegram:', error);
+  }
 }
 
 /**
@@ -111,13 +142,14 @@ async function appendNewDramas(newDramas: string[]): Promise<void> {
 async function main() {
   console.log('🔍 Начинаем поиск новых дорам...');
 
-  const SOURCES = await loadConfig();
-  console.log(`📂 Конфигурация загружена. Источников для проверки: ${SOURCES.length}`);
+  const config = await loadConfig();
+  const {sources, telegram} = config;
+  console.log(`📂 Конфигурация загружена. Источников для проверки: ${sources.length}`);
 
   const existingDramas = await getExistingDramas();
   console.log(`📝 Найдено ${existingDramas.size} дорам в текущем списке.`);
 
-  const fetchPromises = SOURCES.map(fetchDramasFromSource);
+  const fetchPromises = sources.map(fetchDramasFromSource);
   const results = await Promise.all(fetchPromises);
   const allFetchedDramas = new Set(results.flat().filter(Boolean)); // filter(Boolean) уберет пустые строки
 
@@ -129,13 +161,14 @@ async function main() {
     console.log('✅ Новых дорам не найдено.');
   } else {
     await appendNewDramas(newDramas);
+    await sendTelegramNotification(telegram.botToken, telegram.chatId, newDramas);
   }
-  
+
   console.log('🏁 Работа скрипта завершена.');
 }
 
 // Запуск
 main().catch(error => {
-    console.error('❌ Произошла критическая ошибка:', error.message);
-    process.exit(1);
+  console.error('❌ Произошла критическая ошибка:', error.message);
+  process.exit(1);
 });

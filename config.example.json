@@ -1,8 +1,14 @@
 
-[
-  {
-    "url": "https://example.com/api/dramas",
-    "type": "api",
-    "jsonPath": "$.result.*.title"
+{
+  "sources": [
+    {
+      "url": "https://example.com/api/dramas",
+      "type": "api",
+      "jsonPath": "$.result.*.title"
+    }
+  ],
+  "telegram": {
+    "botToken": "",
+    "chatId": ""
   }
-]
+}

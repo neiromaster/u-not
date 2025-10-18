@@ -10,6 +10,7 @@
     "typescript": "^5"
   },
   "dependencies": {
+    "grammy": "^1.38.3",
     "jsonpath-plus": "^10.3.0"
   }
 }
