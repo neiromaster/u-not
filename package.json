@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "grammy": "^1.38.3",
-    "jsonpath-plus": "^10.3.0"
+    "jsonpath-plus": "^10.3.0",
+    "zod": "^4.1.12"
   }
 }

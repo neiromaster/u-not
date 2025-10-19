@@ -1,29 +1,12 @@
 import { Bot } from 'grammy';
 import { JSONPath } from 'jsonpath-plus';
+import type { ChatId, Config, Source } from './config';
+import { validateConfig } from './config';
 
 // --- Типы и константы ---
 
 const DRAMA_LIST_FILE = 'drama-list.md';
 const CONFIG_FILE = 'config.json';
-
-interface Source {
-  name: string;
-  url: string;
-  type: 'api';
-  jsonPath: string;
-}
-
-type ChatId = string | number;
-
-interface TelegramConfig {
-  botToken: string;
-  chatId: ChatId[] | ChatId;
-}
-
-interface Config {
-  sources: Source[];
-  telegram: TelegramConfig;
-}
 
 // --- Логика скрипта ---
 
@@ -37,11 +20,11 @@ async function loadConfig(): Promise<Config> {
     throw new Error(`Файл конфигурации ${CONFIG_FILE} не найден.`);
   }
   try {
-    const config: Config = await file.json();
-    return config;
+    const config = await file.json();
+    return validateConfig(config);
   } catch (error) {
     throw new Error(
-      `Ошибка парсинга ${CONFIG_FILE}. Убедитесь, что это валидный JSON.`,
+      `Ошибка парсинга ${CONFIG_FILE}. Убедитесь, что это валидный JSON. ${error.message}`,
       { cause: error },
     );
   }
