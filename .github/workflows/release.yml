@@ -48,7 +48,7 @@ jobs:
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: new-drama-control-${{ matrix.label }}
+          name: u-not-${{ matrix.label }}
           path: dist/*
 
   changelog:

@@ -1,4 +1,4 @@
-# new-drama-control
+# u-not (Updates NOTifier)
 
 To install dependencies:
 
