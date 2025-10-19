@@ -7,29 +7,8 @@ on:
 
 jobs:
   build:
-    name: Build for ${{ matrix.label }}
-    runs-on: ${{ matrix.runner }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - label: linux-x64
-            runner: ubuntu-latest
-            target: bun-linux-x64
-          - label: windows-x64
-            runner: windows-latest
-            target: bun-windows-x64
-          - label: macos-x64
-            runner: macos-14
-            target: bun-darwin-x64
-          - label: macos-arm64
-            runner: macos-14
-            target: bun-darwin-arm64
-
-    defaults:
-      run:
-        shell: bash
-
+    name: Build binaries
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -42,14 +21,18 @@ jobs:
       - name: Install dependencies
         run: bun install
 
-      - name: Build binary
-        run: bun run build:${{ matrix.label }}
+      - name: Build all binaries
+        run: |
+          bun run build:linux
+          bun run build:windows
+          bun run build:macos-intel
+          bun run build:macos-arm
 
-      - name: Upload build artifact
+      - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: u-not-${{ matrix.label }}
-          path: dist/*
+          name: binaries
+          path: dist/
 
   changelog:
     name: Generate changelog
