@@ -1,6 +1,6 @@
 import { writeFileSync } from 'fs';
 import { z } from 'zod';
-import { configSchema } from './config.ts';
+import { configSchema } from './config';
 
 const jsonSchema = z.toJSONSchema(configSchema);
 
