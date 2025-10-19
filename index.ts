@@ -13,9 +13,11 @@ interface Source {
   jsonPath: string;
 }
 
+type ChatId = string | number;
+
 interface TelegramConfig {
   botToken: string;
-  chatId: string;
+  chatId: ChatId[] | ChatId;
 }
 
 interface Config {
@@ -144,10 +146,14 @@ async function appendNewDramas(
  */
 async function sendTelegramNotification(
   botToken: string,
-  chatId: string,
+  chatIds: ChatId[] | ChatId,
   newDramasBySource: Map<string, string[]>,
 ): Promise<void> {
-  if (!botToken || !chatId) {
+  if (
+    !botToken ||
+    !chatIds ||
+    (Array.isArray(chatIds) && chatIds.length === 0)
+  ) {
     console.log(
       '🔔 Токен или ID чата для Telegram не указаны, уведомление не будет отправлено.',
     );
@@ -163,11 +169,20 @@ async function sendTelegramNotification(
     message += '\n\n';
   }
 
-  try {
-    await bot.api.sendMessage(chatId, message, { parse_mode: 'HTML' });
-    console.log('📤 Уведомление в Telegram успешно отправлено.');
-  } catch (error) {
-    console.error('❌ Ошибка при отправке уведомления в Telegram:', error);
+  const ids = Array.isArray(chatIds) ? chatIds : [chatIds];
+
+  for (const chatId of ids) {
+    try {
+      await bot.api.sendMessage(chatId, message, { parse_mode: 'HTML' });
+      console.log(
+        `📤 Уведомление в Telegram успешно отправлено в чат ${chatId}.`,
+      );
+    } catch (error) {
+      console.error(
+        `❌ Ошибка при отправке уведомления в Telegram в чат ${chatId}:`,
+        error,
+      );
+    }
   }
 }
 

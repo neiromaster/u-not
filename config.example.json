@@ -9,6 +9,6 @@
   ],
   "telegram": {
     "botToken": "",
-    "chatId": ""
+    "chatId": ["-1001234567890"]
   }
 }
