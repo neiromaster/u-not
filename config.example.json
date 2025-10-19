@@ -1,4 +1,5 @@
 {
+  "$schema": "https://raw.githubusercontent.com/neiromaster/u-not/main/config.schema.json",
   "sources": [
     {
       "name": "Example Source",
