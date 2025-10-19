@@ -14,7 +14,7 @@ const telegramConfigSchema = z.object({
   chatId: z.union([chatIdSchema, z.array(chatIdSchema)]),
 });
 
-const configSchema = z.object({
+export const configSchema = z.object({
   sources: z.array(sourceSchema),
   telegram: telegramConfigSchema,
 });

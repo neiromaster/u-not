@@ -8,6 +8,9 @@
     "@types/bun": "latest",
     "lefthook": "^1.13.6"
   },
+  "scripts": {
+    "schema:generate": "bun run generate-schema.ts"
+  },
   "peerDependencies": {
     "typescript": "^5"
   },

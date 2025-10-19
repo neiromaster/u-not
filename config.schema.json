@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "sources": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "type": {
+            "type": "string",
+            "const": "api"
+          },
+          "jsonPath": {
+            "type": "string"
+          }
+        },
+        "required": ["name", "url", "type", "jsonPath"],
+        "additionalProperties": false
+      }
+    },
+    "telegram": {
+      "type": "object",
+      "properties": {
+        "botToken": {
+          "type": "string"
+        },
+        "chatId": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "number"
+                }
+              ]
+            },
+            {
+              "type": "array",
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "required": ["botToken", "chatId"],
+      "additionalProperties": false
+    }
+  },
+  "required": ["sources", "telegram"],
+  "additionalProperties": false
+}
