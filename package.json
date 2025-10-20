@@ -10,6 +10,8 @@
     "lefthook": "^1.13.6"
   },
   "scripts": {
+    "lint": "biome check --write",
+    "typecheck": "tsc --noEmit",
     "schema:generate": "bun run generate-schema.ts",
     "build:linux": "bun build ./index.ts --compile --outfile ./dist/u-not-linux-x64 --target bun-linux-x64",
     "build:windows": "bun build ./index.ts --compile --outfile ./dist/u-not-windows-x64.exe --target bun-windows-x64",

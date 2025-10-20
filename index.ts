@@ -23,9 +23,14 @@ async function loadConfig(): Promise<Config> {
     const config = await file.json();
     return validateConfig(config);
   } catch (error) {
+    if (error instanceof Error) {
+      throw new Error(
+        `Ошибка парсинга ${CONFIG_FILE}. Убедитесь, что это валидный JSON. ${error.message}`,
+        { cause: error },
+      );
+    }
     throw new Error(
-      `Ошибка парсинга ${CONFIG_FILE}. Убедитесь, что это валидный JSON. ${error.message}`,
-      { cause: error },
+      `Ошибка парсинга ${CONFIG_FILE}. Убедитесь, что это валидный JSON.`,
     );
   }
 }
@@ -218,6 +223,10 @@ async function main() {
 
 // Запуск
 main().catch((error) => {
-  console.error('❌ Произошла критическая ошибка:', error.message);
+  if (error instanceof Error) {
+    console.error('❌ Произошла критическая ошибка:', error.message);
+  } else {
+    console.error('❌ Произошла критическая ошибка:', error);
+  }
   process.exit(1);
 });
