@@ -62,6 +62,9 @@
       },
       "required": ["botToken", "chatId"],
       "additionalProperties": false
+    },
+    "$schema": {
+      "type": "string"
     }
   },
   "required": ["sources", "telegram"],
