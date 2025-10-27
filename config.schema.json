@@ -67,6 +67,6 @@
       "type": "string"
     }
   },
-  "required": ["sources", "telegram"],
+  "required": ["sources"],
   "additionalProperties": false
 }

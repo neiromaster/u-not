@@ -16,7 +16,7 @@ const telegramConfigSchema = z.object({
 
 export const configSchema = z.object({
   sources: z.array(sourceSchema),
-  telegram: telegramConfigSchema,
+  telegram: telegramConfigSchema.optional(),
 });
 
 export type Source = z.infer<typeof sourceSchema>;

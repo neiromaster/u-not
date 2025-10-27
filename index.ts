@@ -1,6 +1,6 @@
 import { Bot } from 'grammy';
 import { JSONPath } from 'jsonpath-plus';
-import type { ChatId, Config, Source } from './config';
+import type { Config, Source } from './config';
 import { validateConfig } from './config';
 
 // --- Типы и константы ---
@@ -133,10 +133,18 @@ async function appendNewDramas(
  * Отправляет уведомление в Telegram.
  */
 async function sendTelegramNotification(
-  botToken: string,
-  chatIds: ChatId[] | ChatId,
+  telegram: Config['telegram'],
   newDramasBySource: Map<string, string[]>,
 ): Promise<void> {
+  if (!telegram) {
+    console.log(
+      '🔔 Конфигурация Telegram не найдена, уведомление не будет отправлено.',
+    );
+    return;
+  }
+
+  const { botToken, chatId: chatIds } = telegram;
+
   if (
     !botToken ||
     !chatIds ||
@@ -218,11 +226,7 @@ async function main() {
     console.log('✅ Новых дорам не найдено.');
   } else {
     await appendNewDramas(newDramasBySource);
-    await sendTelegramNotification(
-      telegram.botToken,
-      telegram.chatId,
-      newDramasBySource,
-    );
+    await sendTelegramNotification(telegram, newDramasBySource);
   }
 
   console.log('🏁 Работа скрипта завершена.');
