@@ -192,6 +192,13 @@ async function main() {
   const fetchPromises = sources.map(fetchDramasFromSource);
   const results = await Promise.all(fetchPromises);
 
+  console.log('\n📊 Дорамы, полученные из источников:');
+  for (const result of results) {
+    const sourceName = result.source.name ?? result.source.url;
+    console.log(`  - ${sourceName}: ${result.titles.length} дорам`);
+  }
+  console.log('');
+
   const newDramasBySource = new Map<string, string[]>();
   let totalNewDramas = 0;
 
