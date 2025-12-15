@@ -1,3 +1,5 @@
+import { stdin as input, stdout as output } from 'node:process';
+import * as readline from 'node:readline/promises';
 import { Bot } from 'grammy';
 import { JSONPath } from 'jsonpath-plus';
 import type { Config, Source } from './config';
@@ -8,11 +10,6 @@ import { validateConfig } from './config';
 const DRAMA_LIST_FILE = 'drama-list.md';
 const CONFIG_FILE = 'config.json';
 
-// --- Логика скрипта ---
-
-/**
- * Загружает конфигурацию из JSON-файла.
- */
 async function loadConfig(): Promise<Config> {
   const file = Bun.file(CONFIG_FILE);
   const exists = await file.exists();
@@ -35,9 +32,6 @@ async function loadConfig(): Promise<Config> {
   }
 }
 
-/**
- * Читает файл drama-list.md и возвращает Set с уникальными названиями дорам.
- */
 async function getExistingDramas(): Promise<Set<string>> {
   const file = Bun.file(DRAMA_LIST_FILE);
   const exists = await file.exists();
@@ -63,9 +57,6 @@ interface FetchedDramas {
   titles: string[];
 }
 
-/**
- * Загружает и парсит дорамы из одного источника.
- */
 async function fetchDramasFromSource(
   source: Source,
   userAgent?: string,
@@ -101,9 +92,6 @@ async function fetchDramasFromSource(
   }
 }
 
-/**
- * Форматирует дату для заголовка.
- */
 function getTimestamp(): string {
   const now = new Date();
   const day = String(now.getDate()).padStart(2, '0');
@@ -114,9 +102,6 @@ function getTimestamp(): string {
   return `${day}.${month}.${year} ${hours}:${minutes}`;
 }
 
-/**
- * Добавляет новые дорамы в файл.
- */
 async function appendNewDramas(
   newDramasBySource: Map<string, string[]>,
 ): Promise<void> {
@@ -142,9 +127,6 @@ async function appendNewDramas(
   }
 }
 
-/**
- * Отправляет уведомление в Telegram.
- */
 async function sendTelegramNotification(
   telegram: Config['telegram'],
   newDramasBySource: Map<string, string[]>,
@@ -195,9 +177,6 @@ async function sendTelegramNotification(
   }
 }
 
-/**
- * Основная функция
- */
 async function main() {
   console.log('🔍 Начинаем поиск новых дорам...');
 
@@ -247,12 +226,25 @@ async function main() {
   console.log('🏁 Работа скрипта завершена.');
 }
 
-// Запуск
-main().catch((error) => {
+async function waitForUserInput(): Promise<void> {
+  const rl = readline.createInterface({ input, output });
+  try {
+    await rl.question('Нажмите Enter для выхода...');
+  } finally {
+    rl.close();
+  }
+}
+
+main().catch(async (error) => {
   if (error instanceof Error) {
     console.error('❌ Произошла критическая ошибка:', error.message);
   } else {
     console.error('❌ Произошла критическая ошибка:', error);
   }
-  process.exit(1);
+
+  try {
+    await waitForUserInput();
+  } finally {
+    process.exit(1);
+  }
 });
