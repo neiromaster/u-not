@@ -66,9 +66,22 @@ interface FetchedDramas {
 /**
  * Загружает и парсит дорамы из одного источника.
  */
-async function fetchDramasFromSource(source: Source): Promise<FetchedDramas> {
+async function fetchDramasFromSource(
+  source: Source,
+  userAgent?: string,
+): Promise<FetchedDramas> {
   try {
-    const response = await fetch(source.url);
+    const headers: Record<string, string> = {};
+
+    if (userAgent) {
+      headers['User-Agent'] = userAgent;
+    }
+
+    if (source.headers) {
+      Object.assign(headers, source.headers);
+    }
+
+    const response = await fetch(source.url, { headers });
     if (!response.ok) {
       console.error(
         `Ошибка при загрузке ${source.url}: ${response.statusText}`,
@@ -189,7 +202,7 @@ async function main() {
   console.log('🔍 Начинаем поиск новых дорам...');
 
   const config = await loadConfig();
-  const { sources, telegram } = config;
+  const { sources, telegram, userAgent } = config;
   console.log(
     `📂 Конфигурация загружена. Источников для проверки: ${sources.length}`,
   );
@@ -197,7 +210,9 @@ async function main() {
   const existingDramas = await getExistingDramas();
   console.log(`📝 Найдено ${existingDramas.size} дорам в текущем списке.`);
 
-  const fetchPromises = sources.map(fetchDramasFromSource);
+  const fetchPromises = sources.map((source) =>
+    fetchDramasFromSource(source, userAgent),
+  );
   const results = await Promise.all(fetchPromises);
 
   console.log('\n📊 Дорамы, полученные из источников:');

@@ -20,6 +20,15 @@
           },
           "jsonPath": {
             "type": "string"
+          },
+          "headers": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {
+              "type": "string"
+            }
           }
         },
         "required": ["name", "url", "type", "jsonPath"],
@@ -62,6 +71,9 @@
       },
       "required": ["botToken", "chatId"],
       "additionalProperties": false
+    },
+    "userAgent": {
+      "type": "string"
     },
     "$schema": {
       "type": "string"

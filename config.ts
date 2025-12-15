@@ -7,6 +7,7 @@ const sourceSchema = z.object({
   url: z.string().url(),
   type: z.literal('api'),
   jsonPath: z.string(),
+  headers: z.record(z.string(), z.string()).optional(),
 });
 
 const telegramConfigSchema = z.object({
@@ -17,6 +18,7 @@ const telegramConfigSchema = z.object({
 export const configSchema = z.object({
   sources: z.array(sourceSchema),
   telegram: telegramConfigSchema.optional(),
+  userAgent: z.string().optional(),
 });
 
 export type Source = z.infer<typeof sourceSchema>;
