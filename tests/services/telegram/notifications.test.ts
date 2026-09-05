@@ -31,7 +31,7 @@ describe('sendTelegramNotification', () => {
   test('не отправляет уведомление при пустом chatId', async () => {
     await sendTelegramNotification(
       { botToken: 'token', chatId: [] },
-      new Map([['Okko', ['Дорама 1']]]),
+      new Map([['Okko', [{ title: 'Дорама 1' }]]]),
     );
     expect(sendMessage).not.toHaveBeenCalled();
   });
@@ -39,7 +39,7 @@ describe('sendTelegramNotification', () => {
   test('отправляет сообщение в каждый чат', async () => {
     await sendTelegramNotification(
       { botToken: 'token', chatId: ['-1001', '-1002'] },
-      new Map([['Okko', ['Дорама 1', 'Дорама 2']]]),
+      new Map([['Okko', [{ title: 'Дорама 1' }, { title: 'Дорама 2' }]]]),
     );
 
     expect(sendMessage).toHaveBeenCalledTimes(2);

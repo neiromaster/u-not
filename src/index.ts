@@ -7,6 +7,7 @@
 import { stdin as input, stdout as output } from 'node:process';
 import * as readline from 'node:readline/promises';
 import { type Config, validateConfig } from '@/core/config/schema';
+import type { Drama } from '@/core/drama/fetcher';
 import { fetchDramasFromSource } from '@/core/drama/fetcher';
 import { appendNewDramas, getExistingDramas } from '@/core/drama/storage';
 import { sendTelegramNotification } from '@/services/telegram/notifications';
@@ -56,20 +57,20 @@ async function main() {
   console.log('\n📊 Дорамы, полученные из источников:');
   for (const result of results) {
     const sourceName = result.source.name ?? result.source.url;
-    console.log(`  - ${sourceName}: ${result.titles.length} дорам`);
+    console.log(`  - ${sourceName}: ${result.dramas.length} дорам`);
   }
   console.log('');
 
-  const newDramasBySource = new Map<string, string[]>();
+  const newDramasBySource = new Map<string, Drama[]>();
   let totalNewDramas = 0;
 
   for (const result of results) {
-    const newTitles = result.titles.filter(
-      (title) => !existingDramas.has(title),
+    const newDramas = result.dramas.filter(
+      (drama) => !existingDramas.has(drama.title),
     );
-    if (newTitles.length > 0) {
-      newDramasBySource.set(result.source.name ?? result.source.url, newTitles);
-      totalNewDramas += newTitles.length;
+    if (newDramas.length > 0) {
+      newDramasBySource.set(result.source.name ?? result.source.url, newDramas);
+      totalNewDramas += newDramas.length;
     }
   }
 

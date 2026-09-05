@@ -6,6 +6,7 @@
 
 import { Bot } from 'grammy';
 import type { Config } from '@/core/config/schema';
+import type { Drama } from '@/core/drama/fetcher';
 
 /**
  * Отправляет уведомление в Telegram
@@ -15,7 +16,7 @@ import type { Config } from '@/core/config/schema';
  */
 export async function sendTelegramNotification(
   telegram: Config['telegram'],
-  newDramasBySource: Map<string, string[]>,
+  newDramasBySource: Map<string, Drama[]>,
 ): Promise<void> {
   if (!telegram) {
     console.log(
@@ -42,7 +43,7 @@ export async function sendTelegramNotification(
 
   for (const [sourceName, dramas] of newDramasBySource.entries()) {
     message += `<b>${sourceName}:</b>\n`;
-    message += dramas.map((d) => `• ${d}`).join('\n');
+    message += dramas.map((d) => `• ${d.title}`).join('\n');
     message += '\n\n';
   }
 

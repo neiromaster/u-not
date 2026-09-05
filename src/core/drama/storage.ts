@@ -4,6 +4,8 @@
  * @module core/drama/storage
  */
 
+import type { Drama } from '@/core/drama/fetcher';
+
 const DRAMA_LIST_FILE = 'drama-list.md';
 
 /**
@@ -41,7 +43,7 @@ export async function getExistingDramas(
  * @param filePath - Путь к файлу со списком дорам (по умолчанию drama-list.md)
  */
 export async function appendNewDramas(
-  newDramasBySource: Map<string, string[]>,
+  newDramasBySource: Map<string, Drama[]>,
   filePath = DRAMA_LIST_FILE,
 ): Promise<void> {
   const timestamp = getTimestamp();
@@ -52,7 +54,7 @@ export async function appendNewDramas(
   let newSection = `\n## ${timestamp}\n`;
   for (const [sourceName, dramas] of newDramasBySource.entries()) {
     newSection += `### ${sourceName}\n`;
-    newSection += dramas.map((drama) => `- ${drama}`).join('\n');
+    newSection += dramas.map((drama) => `- ${drama.title}`).join('\n');
     newSection += '\n';
   }
 

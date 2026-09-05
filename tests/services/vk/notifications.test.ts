@@ -38,7 +38,7 @@ describe('sendVkNotification', () => {
 
     await sendVkNotification(
       { accessToken: 'token', peerId: [] },
-      new Map([['Okko', ['Дорама 1']]]),
+      new Map([['Okko', [{ title: 'Дорама 1' }]]]),
     );
     expect(called).toBe(false);
   });
@@ -55,7 +55,7 @@ describe('sendVkNotification', () => {
 
     await sendVkNotification(
       { accessToken: 'token', peerId: [2000000001, 2000000002] },
-      new Map([['Okko', ['Дорама 1', 'Дорама 2']]]),
+      new Map([['Okko', [{ title: 'Дорама 1' }, { title: 'Дорама 2' }]]]),
     );
 
     expect(calls).toEqual(['2000000001', '2000000002']);
@@ -72,7 +72,7 @@ describe('sendVkNotification', () => {
 
     await sendVkNotification(
       { accessToken: 'secret-token', peerId: 2000000001 },
-      new Map([['Okko', ['Дорама 1']]]),
+      new Map([['Okko', [{ title: 'Дорама 1' }]]]),
     );
 
     expect(capturedBody?.get('access_token')).toBe('secret-token');
@@ -97,7 +97,7 @@ describe('sendVkNotification', () => {
     await expect(
       sendVkNotification(
         { accessToken: 'token', peerId: 2000000001 },
-        new Map([['Okko', ['Дорама 1']]]),
+        new Map([['Okko', [{ title: 'Дорама 1' }]]]),
       ),
     ).resolves.toBeUndefined();
   });
@@ -111,7 +111,7 @@ describe('sendVkNotification', () => {
     await expect(
       sendVkNotification(
         { accessToken: 'token', peerId: 2000000001 },
-        new Map([['Okko', ['Дорама 1']]]),
+        new Map([['Okko', [{ title: 'Дорама 1' }]]]),
       ),
     ).resolves.toBeUndefined();
   });

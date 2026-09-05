@@ -5,6 +5,7 @@
  */
 
 import type { Config } from '@/core/config/schema';
+import type { Drama } from '@/core/drama/fetcher';
 
 const VK_API_URL = 'https://api.vk.com/method/messages.send';
 const DEFAULT_API_VERSION = '5.199';
@@ -26,7 +27,7 @@ function generateRandomId(): number {
  */
 export async function sendVkNotification(
   vk: Config['vk'],
-  newDramasBySource: Map<string, string[]>,
+  newDramasBySource: Map<string, Drama[]>,
 ): Promise<void> {
   if (!vk) {
     console.log(
@@ -48,7 +49,7 @@ export async function sendVkNotification(
 
   for (const [sourceName, dramas] of newDramasBySource.entries()) {
     message += `**${sourceName}:**\n`;
-    message += dramas.map((d) => `• ${d}`).join('\n');
+    message += dramas.map((d) => `• ${d.title}`).join('\n');
     message += '\n\n';
   }
 

@@ -40,8 +40,34 @@ test('getExistingDramas читает названия из файла', async ()
   expect(dramas).toEqual(new Set(['Дорама 1', 'Дорама 2']));
 });
 
+test('appendNewDramas пишет только названия из Drama[]', async () => {
+  await appendNewDramas(
+    new Map([
+      [
+        'Okko',
+        [
+          {
+            title: 'Дорама 1',
+            posterUrl: 'https://img.example.com/poster1.jpg',
+            link: 'https://example.com/watch/1',
+          },
+        ],
+      ],
+    ]),
+    TEST_FILE,
+  );
+
+  const content = await Bun.file(TEST_FILE).text();
+  expect(content).toContain('- Дорама 1');
+  expect(content).not.toContain('poster1.jpg');
+  expect(content).not.toContain('https://');
+});
+
 test('appendNewDramas создаёт файл с новой секцией', async () => {
-  await appendNewDramas(new Map([['Okko', ['Дорама 1']]]), TEST_FILE);
+  await appendNewDramas(
+    new Map([['Okko', [{ title: 'Дорама 1' }]]]),
+    TEST_FILE,
+  );
 
   const content = await Bun.file(TEST_FILE).text();
   expect(content).toContain('### Okko');
@@ -50,7 +76,10 @@ test('appendNewDramas создаёт файл с новой секцией', asy
 
 test('appendNewDramas дополняет существующий файл', async () => {
   await Bun.write(TEST_FILE, '## 01.01.2026 10:00\n### Okko\n- Старая\n');
-  await appendNewDramas(new Map([['Netflix', ['Новая']]]), TEST_FILE);
+  await appendNewDramas(
+    new Map([['Netflix', [{ title: 'Новая' }]]]),
+    TEST_FILE,
+  );
 
   const content = await Bun.file(TEST_FILE).text();
   expect(content).toContain('- Старая');
