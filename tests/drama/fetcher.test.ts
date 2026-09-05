@@ -178,6 +178,42 @@ test('извлекает постеры и ссылки с $-префиксны�
   ]);
 });
 
+test('подставляет posterBaseUrl перед относительным URL постера', async () => {
+  globalThis.fetch = (() =>
+    Promise.resolve(
+      new Response(
+        JSON.stringify({
+          items: [
+            {
+              name: 'Дорама 1',
+              logo: '/images/poster1.jpg',
+              slug: 'dorama-1',
+            },
+          ],
+        }),
+        { status: 200 },
+      ),
+    )) as unknown as typeof fetch;
+
+  const richSource: Source = {
+    ...source,
+    jsonPath: '$.items.*.name',
+    posterJsonPath: '$.items.*.logo',
+    linkJsonPath: '$.items.*.slug',
+    posterBaseUrl: 'https://images.example.com',
+    linkBaseUrl: 'https://wink.example.com/series/',
+  };
+
+  const result = await fetchDramasFromSource(richSource);
+  expect(result.dramas).toEqual([
+    {
+      title: 'Дорама 1',
+      posterUrl: 'https://images.example.com/images/poster1.jpg',
+      link: 'https://wink.example.com/series/dorama-1',
+    },
+  ]);
+});
+
 test('возвращает только названия без постеров и ссылок', async () => {
   globalThis.fetch = (() =>
     Promise.resolve(

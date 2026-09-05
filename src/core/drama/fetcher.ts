@@ -21,14 +21,24 @@ export interface FetchedDramas {
 }
 
 /**
- * Заменяет плейсхолдер {SIZE} в URL постера на реальный размер
+ * Нормализует URL постера: заменяет плейсхолдер {SIZE} на реальный размер
+ * и подставляет posterBaseUrl перед относительным URL
  *
  * @param url - URL постера
  * @param posterSize - Размер постера
+ * @param posterBaseUrl - Базовый домен для относительных URL (опционально)
  * @returns Нормализованный URL
  */
-function normalizePosterUrl(url: string, posterSize: string): string {
-  return url.replaceAll('{SIZE}', posterSize);
+function normalizePosterUrl(
+  url: string,
+  posterSize: string,
+  posterBaseUrl?: string,
+): string {
+  const sized = url.replaceAll('{SIZE}', posterSize);
+  if (sized.startsWith('http')) {
+    return sized;
+  }
+  return posterBaseUrl ? posterBaseUrl + sized : sized;
 }
 
 /**
@@ -58,6 +68,8 @@ function normalizeLink(link: string, linkBaseUrl?: string): string {
  * `jsonPath: 'results.*.title'` постер должен быть `results.*.assets.poster`,
  * а не `data.*.assets.poster` — иначе относительный путь не построится
  * и постер/ссылка будут молча потеряны (в лог попадёт предупреждение).
+ * `posterBaseUrl` (как и `linkBaseUrl`) подставляется перед относительным
+ * URL постера, если тот не начинается с `http`.
  */
 export async function fetchDramasFromSource(
   source: Source,
@@ -127,7 +139,11 @@ export async function fetchDramasFromSource(
       if (posterPath) {
         const poster = JSONPath({ path: posterPath, json: item })[0];
         if (typeof poster === 'string') {
-          drama.posterUrl = normalizePosterUrl(poster, posterSize);
+          drama.posterUrl = normalizePosterUrl(
+            poster,
+            posterSize,
+            source.posterBaseUrl,
+          );
         }
       }
 

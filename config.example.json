@@ -12,25 +12,56 @@
       "posterSize": "400x600"
     },
     {
-      "name": "Example Source",
-      "url": "https://example.com/api/dramas",
+      "name": "ivi",
+      "url": "https://api2.ivi.ru/mobileapi/catalogue/v7/?app_version=870&category=15&country=12&country=25&from=0&sort=new&to=29&withpreorderable=1&fields=title,posters,share_link",
       "type": "api",
-      "jsonPath": "$.result.*.title",
+      "jsonPath": "result.*.title",
+      "posterJsonPath": "result.*.posters[?(@.type==\"poster-vertical\")].url",
+      "linkJsonPath": "result.*.share_link"
+    },
+    {
+      "name": "IVI микро",
+      "url": "https://api2.ivi.ru/mobileapi/collection/catalog/v7/?app_version=870&country=12&from=0&id=15179&session=YOUR_IVI_SESSION&sort=relevance&to=29&user_ab_bucket=6239&withpreorderable=1&fields=title,posters,hru",
+      "type": "api",
+      "jsonPath": "result.*.title",
+      "posterJsonPath": "result.*.posters[?(@.type==\"poster-vertical\")].url",
+      "linkJsonPath": "result.*.hru",
+      "linkBaseUrl": "https://www.ivi.ru/watch/"
+    },
+    {
+      "name": "viju",
+      "url": "https://api.viju.ru/api/v1/content/serials?countries_slugs[]=kitayskie&countries_slugs[]=koreyskie&page=1&with_locked=false&with_seasons=false&per_page=20",
+      "type": "api",
+      "jsonPath": "$.*.title",
+      "posterJsonPath": "$.*.poster",
+      "linkJsonPath": "$.*.slug",
+      "linkBaseUrl": "https://viju.ru/serials/",
       "headers": {
-        "Authorization": "Bearer token123",
-        "Accept": "application/json",
-        "X-Custom-Header": "value"
+        "Visitorid": "YOUR_VIJU_VISITORID"
+      }
+    },
+    {
+      "name": "wink",
+      "url": "https://cnt-lbrc-itv01.restream-media.net/api/v2/user/media_items?f_countries=Kitaj,YuzhnayaKoreya&filter_theme=series&limit=48&offset=0",
+      "type": "api",
+      "jsonPath": "$.items.*.name",
+      "posterJsonPath": "$.items.*.logo",
+      "posterBaseUrl": "https://images.restream-media.net",
+      "linkJsonPath": "$.items.*.slug",
+      "linkBaseUrl": "https://wink.ru/series/",
+      "headers": {
+        "session_id": "YOUR_WINK_SESSION_ID"
       }
     }
   ],
   "telegram": {
     "botToken": "",
-    "chatId": ["-1001234567890"],
-    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0"
+    "chatId": ["-1001234567890"]
   },
   "vk": {
     "accessToken": "",
     "peerId": [2000000001],
     "apiVersion": "5.199"
-  }
+  },
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0"
 }

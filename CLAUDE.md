@@ -37,7 +37,7 @@ src/
 - Lefthook: pre-commit = biome + typecheck, pre-push = lint + typecheck + test; run locally with `bunx lefthook run <hook>` (not in PATH); pre-commit typecheck blocks TDD red states — commit them with `--no-verify`
 - On critical error the app waits for Enter before exiting (not for CI)
 - `bun run lint` = `biome check --write` — modifies files
-- A source may contain `posterJsonPath`, `linkJsonPath`, `linkBaseUrl`, `posterSize` — poster and link are optional; `{SIZE}` in the poster URL is replaced with `posterSize` (default `400x600`)
+- A source may contain `posterJsonPath`, `linkJsonPath`, `linkBaseUrl`, `posterBaseUrl`, `posterSize` — poster and link are optional; `{SIZE}` in the poster URL is replaced with `posterSize` (default `400x600`); `posterBaseUrl` is prepended to a relative poster URL (e.g. wink's `images.restream-media.net`)
 - `response.json()` in Bun returns `unknown` — cast to `object` for JSONPath
 - jsonpath-plus compacts missing fields: `results.*.assets.productPoster` skips items without the field, so parallel-array extraction misaligns — query the object path once and extract title/poster/link from each item via relative paths
 - `userAgent` is an optional top-level config field, forwarded to the fetcher and to VK poster download

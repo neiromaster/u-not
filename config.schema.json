@@ -31,6 +31,10 @@
             "type": "string",
             "format": "uri"
           },
+          "posterBaseUrl": {
+            "type": "string",
+            "format": "uri"
+          },
           "posterSize": {
             "type": "string"
           },
