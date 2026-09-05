@@ -121,6 +121,63 @@ test('не смещает постеры и ссылки, если у дорам
   ]);
 });
 
+test('извлекает названия, если jsonPath указывает прямо на массив строк', async () => {
+  globalThis.fetch = (() =>
+    Promise.resolve(
+      new Response(
+        JSON.stringify({
+          titles: ['Дорама 1', 'Дорама 2'],
+        }),
+        { status: 200 },
+      ),
+    )) as unknown as typeof fetch;
+
+  const stringArraySource: Source = {
+    ...source,
+    jsonPath: 'titles.*',
+  };
+
+  const result = await fetchDramasFromSource(stringArraySource);
+  expect(result.dramas).toEqual([{ title: 'Дорама 1' }, { title: 'Дорама 2' }]);
+});
+
+test('извлекает постеры и ссылки с $-префиксными путями', async () => {
+  globalThis.fetch = (() =>
+    Promise.resolve(
+      new Response(
+        JSON.stringify({
+          result: [
+            {
+              title: 'Дорама 1',
+              assets: {
+                productPoster: 'https://img.example.com/{SIZE}/poster1.jpg',
+              },
+              webUrl: '/watch/1',
+            },
+          ],
+        }),
+        { status: 200 },
+      ),
+    )) as unknown as typeof fetch;
+
+  const richSource: Source = {
+    ...source,
+    jsonPath: '$.result.*.title',
+    posterJsonPath: '$.result.*.assets.productPoster',
+    linkJsonPath: '$.result.*.webUrl',
+    linkBaseUrl: 'https://amediateka.ru',
+  };
+
+  const result = await fetchDramasFromSource(richSource);
+  expect(result.dramas).toEqual([
+    {
+      title: 'Дорама 1',
+      posterUrl: 'https://img.example.com/400x600/poster1.jpg',
+      link: 'https://amediateka.ru/watch/1',
+    },
+  ]);
+});
+
 test('возвращает только названия без постеров и ссылок', async () => {
   globalThis.fetch = (() =>
     Promise.resolve(

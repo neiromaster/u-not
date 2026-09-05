@@ -6,8 +6,20 @@
 
 import { afterEach, describe, expect, mock, test } from 'bun:test';
 
-const sendMessage = mock(async () => ({}));
-const sendPhoto = mock(async () => ({}));
+const sendMessage = mock(
+  async (
+    _chatId: string,
+    _message: string,
+    _opts: { parse_mode: string },
+  ) => ({}),
+);
+const sendPhoto = mock(
+  async (
+    _chatId: string,
+    _photo: string,
+    _opts: { caption: string; parse_mode: string },
+  ) => ({}),
+);
 
 mock.module('grammy', () => ({
   Bot: class {
@@ -68,6 +80,33 @@ describe('sendTelegramNotification', () => {
     expect(sendMessage).not.toHaveBeenCalled();
   });
 
+  test('отправляет текст, если фото не отправилось', async () => {
+    sendPhoto.mockRejectedValueOnce(new Error('photo failed'));
+
+    await sendTelegramNotification(
+      { botToken: 'token', chatId: '-1001' },
+      new Map([
+        [
+          'Okko',
+          [
+            {
+              title: 'Дорама 1',
+              posterUrl: 'https://img.example.com/poster1.jpg',
+            },
+          ],
+        ],
+      ]),
+    );
+
+    expect(sendPhoto).toHaveBeenCalledTimes(1);
+    expect(sendMessage).toHaveBeenCalledTimes(1);
+    expect(sendMessage).toHaveBeenCalledWith(
+      '-1001',
+      expect.stringContaining('Дорама 1'),
+      { parse_mode: 'HTML' },
+    );
+  });
+
   test('отправляет текст без постера', async () => {
     await sendTelegramNotification(
       { botToken: 'token', chatId: '-1001' },
@@ -100,7 +139,11 @@ describe('sendTelegramNotification', () => {
       ]),
     );
 
-    const callArgs = sendPhoto.mock.calls[0] as any;
+    const callArgs = sendPhoto.mock.calls[0] as [
+      string,
+      string,
+      { caption: string; parse_mode: string },
+    ];
     const caption = callArgs[2].caption;
 
     expect(caption).toContain('<b>Дорама &lt;1&gt; &amp; 2</b>');

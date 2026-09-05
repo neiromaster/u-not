@@ -166,6 +166,41 @@ describe('sendVkNotification', () => {
     expect(sendBody?.get('message')).toContain('Дорама 1');
   });
 
+  test('передаёт access_token и версию API в messages.send', async () => {
+    let sendBody: URLSearchParams | undefined;
+    globalThis.fetch = ((url: string, init?: RequestInit) => {
+      if (url.endsWith('messages.send')) {
+        sendBody = init?.body as URLSearchParams;
+        return Promise.resolve(
+          new Response(JSON.stringify({ response: 1 }), { status: 200 }),
+        );
+      }
+      return Promise.resolve(new Response('{}', { status: 200 }));
+    }) as unknown as typeof fetch;
+
+    await sendVkNotification(
+      { accessToken: 'token', peerId: 2000000001 },
+      new Map([['Okko', [{ title: 'Дорама 1' }]]]),
+    );
+
+    expect(sendBody?.get('access_token')).toBe('token');
+    expect(sendBody?.get('v')).toBe('5.199');
+  });
+
+  test('не бросает ошибку при HTTP-ошибке 500', async () => {
+    globalThis.fetch = (() =>
+      Promise.resolve(
+        new Response('Internal Server Error', { status: 500 }),
+      )) as unknown as typeof fetch;
+
+    await expect(
+      sendVkNotification(
+        { accessToken: 'token', peerId: 2000000001 },
+        new Map([['Okko', [{ title: 'Дорама 1' }]]]),
+      ),
+    ).resolves.toBeUndefined();
+  });
+
   test('не бросает ошибку при ответе API с ошибкой', async () => {
     globalThis.fetch = (() =>
       Promise.resolve(

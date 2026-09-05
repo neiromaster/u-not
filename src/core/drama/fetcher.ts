@@ -51,6 +51,13 @@ function normalizeLink(link: string, linkBaseUrl?: string): string {
  * @param source - Конфигурация источника данных
  * @param userAgent - Пользовательский агент для запроса (опционально)
  * @returns Объект с источником и списком дорам
+ *
+ * @remarks
+ * `posterJsonPath` и `linkJsonPath` должны разделять объектный префикс
+ * с `jsonPath` (часть пути до массива объектов). Например, для
+ * `jsonPath: 'results.*.title'` постер должен быть `results.*.assets.poster`,
+ * а не `data.*.assets.poster` — иначе относительный путь не построится
+ * и постер/ссылка будут молча потеряны (в лог попадёт предупреждение).
  */
 export async function fetchDramasFromSource(
   source: Source,
@@ -77,8 +84,14 @@ export async function fetchDramasFromSource(
 
     const json = await response.json();
     const objectPath = source.jsonPath.replace(/\.\w+$/, '');
-    const toRelative = (path: string): string =>
-      path.slice(objectPath.length).replace(/^\./, '');
+    const toRelative = (path: string): string => {
+      if (!path.startsWith(objectPath)) {
+        console.warn(
+          `⚠️ Путь ${path} не начинается с объектного пути ${objectPath} — постер/ссылка могут не извлекаться.`,
+        );
+      }
+      return path.slice(objectPath.length).replace(/^\./, '');
+    };
     const titlePath = toRelative(source.jsonPath);
     const posterPath = source.posterJsonPath
       ? toRelative(source.posterJsonPath)
@@ -96,6 +109,14 @@ export async function fetchDramasFromSource(
 
     const dramas: Drama[] = [];
     for (const item of items) {
+      // jsonPath указывает прямо на массив строк (без поля-листа)
+      if (titlePath === '') {
+        if (typeof item === 'string') {
+          dramas.push({ title: item });
+        }
+        continue;
+      }
+
       const title = JSONPath({ path: titlePath, json: item })[0];
       if (typeof title !== 'string') {
         continue;

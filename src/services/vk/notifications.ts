@@ -94,6 +94,7 @@ async function uploadPhotoToVk(
     )) as { upload_url: string };
 
     const form = new FormData();
+    // Bun-овский Blob не совпадает с DOM-типом Blob из bun-types — нужен каст
     form.append('photo', blob as unknown as Blob, 'poster.jpg');
     const uploadResponse = await fetch(uploadServer.upload_url, {
       method: 'POST',

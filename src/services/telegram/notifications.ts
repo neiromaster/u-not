@@ -74,16 +74,26 @@ export async function sendTelegramNotification(
     for (const [sourceName, dramas] of newDramasBySource.entries()) {
       for (const drama of dramas) {
         const caption = buildCaption(drama, sourceName);
+        const sendText = () =>
+          bot.api.sendMessage(chatId, caption, { parse_mode: 'HTML' });
         try {
           if (drama.posterUrl) {
-            await bot.api.sendPhoto(chatId, drama.posterUrl, {
-              caption,
-              parse_mode: 'HTML',
-            });
+            try {
+              await bot.api.sendPhoto(chatId, drama.posterUrl, {
+                caption,
+                parse_mode: 'HTML',
+              });
+            } catch (photoError) {
+              // Если фото не отправилось (например, Telegram не смог загрузить
+              // постер), отправляем текст без фото — не теряем уведомление.
+              console.warn(
+                `⚠️ Не удалось отправить фото в чат ${chatId}, отправляю текст:`,
+                photoError,
+              );
+              await sendText();
+            }
           } else {
-            await bot.api.sendMessage(chatId, caption, {
-              parse_mode: 'HTML',
-            });
+            await sendText();
           }
           console.log(
             `📤 Уведомление в Telegram успешно отправлено в чат ${chatId}.`,
