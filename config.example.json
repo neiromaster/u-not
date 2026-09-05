@@ -17,5 +17,10 @@
     "botToken": "",
     "chatId": ["-1001234567890"],
     "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0"
+  },
+  "vk": {
+    "accessToken": "",
+    "peerId": [2000000001],
+    "apiVersion": "5.199"
   }
 }

@@ -21,15 +21,23 @@ const telegramConfigSchema = z.object({
   chatId: z.union([chatIdSchema, z.array(chatIdSchema)]),
 });
 
+const vkConfigSchema = z.object({
+  accessToken: z.string(),
+  peerId: z.union([z.number(), z.array(z.number())]),
+  apiVersion: z.string().optional(),
+});
+
 export const configSchema = z.object({
   sources: z.array(sourceSchema),
   telegram: telegramConfigSchema.optional(),
+  vk: vkConfigSchema.optional(),
   userAgent: z.string().optional(),
 });
 
 export type Source = z.infer<typeof sourceSchema>;
 export type Config = z.infer<typeof configSchema>;
 export type ChatId = z.infer<typeof chatIdSchema>;
+export type VkConfig = z.infer<typeof vkConfigSchema>;
 
 /**
  * Валидирует конфигурацию и возвращает отвалидированные данные

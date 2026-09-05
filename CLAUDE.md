@@ -25,6 +25,7 @@ src/
 ├── core/drama/fetcher.ts        # Загрузка дорам из API (JSONPath)
 ├── core/drama/storage.ts        # Работа с drama-list.md
 ├── services/telegram/notifications.ts  # Уведомления через grammy
+├── services/vk/notifications.ts # Уведомления в беседу VK (messages.send)
 └── index.ts                     # Точка входа
 ```
 

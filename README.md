@@ -55,6 +55,11 @@ src/
     "botToken": "YOUR_BOT_TOKEN",
     "chatId": ["-1001234567890"]
   },
+  "vk": {
+    "accessToken": "YOUR_GROUP_TOKEN",
+    "peerId": [2000000001],
+    "apiVersion": "5.199"
+  },
   "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0"
 }
 ```
@@ -76,6 +81,7 @@ src/
 
 ### Services
 - **telegram/notifications.ts**: Отправка уведомлений через Telegram Bot API
+- **vk/notifications.ts**: Отправка уведомлений в беседу VK через messages.send
 
 ### Утилиты
 - Биоме для форматирования и линтинга

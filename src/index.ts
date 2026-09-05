@@ -10,6 +10,7 @@ import { type Config, validateConfig } from '@/core/config/schema';
 import { fetchDramasFromSource } from '@/core/drama/fetcher';
 import { appendNewDramas, getExistingDramas } from '@/core/drama/storage';
 import { sendTelegramNotification } from '@/services/telegram/notifications';
+import { sendVkNotification } from '@/services/vk/notifications';
 
 const CONFIG_FILE = 'config.json';
 
@@ -79,6 +80,7 @@ async function main() {
   } else {
     await appendNewDramas(newDramasBySource);
     await sendTelegramNotification(telegram, newDramasBySource);
+    await sendVkNotification(config.vk, newDramasBySource);
   }
 
   console.log('🏁 Работа скрипта завершена.');

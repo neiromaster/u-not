@@ -72,6 +72,32 @@
       "required": ["botToken", "chatId"],
       "additionalProperties": false
     },
+    "vk": {
+      "type": "object",
+      "properties": {
+        "accessToken": {
+          "type": "string"
+        },
+        "peerId": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "number"
+              }
+            }
+          ]
+        },
+        "apiVersion": {
+          "type": "string"
+        }
+      },
+      "required": ["accessToken", "peerId"],
+      "additionalProperties": false
+    },
     "userAgent": {
       "type": "string"
     },
