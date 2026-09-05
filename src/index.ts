@@ -132,8 +132,6 @@ main().catch(async (error) => {
     console.error('❌ Произошла критическая ошибка:', error);
   }
 
-  // Ожидание Enter — только для интерактивного запуска; в CI/cron
-  // (stdin закрыт или перенаправлен) выходим сразу с ненулевым кодом
   if (process.stdin.isTTY) {
     await waitForUserInput();
   }
