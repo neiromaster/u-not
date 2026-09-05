@@ -23,7 +23,7 @@
     "typescript": "^5"
   },
   "dependencies": {
-    "grammy": "^1.38.4",
+    "grammy": "^1.46.0",
     "jsonpath-plus": "^10.3.0",
     "zod": "^4.5.4"
   }
