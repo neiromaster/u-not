@@ -75,7 +75,7 @@ jobs:
           path: artifacts/
 
       - name: Publish release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           body: ${{ needs.changelog.outputs.changelog }}
           files: artifacts/**/*
