@@ -70,6 +70,11 @@ test("hello world", () => {
 - storage functions accept an optional `filePath` (default `drama-list.md`) — tests write to a temp file
 - `RequestInfo` is unavailable (lib ESNext without DOM) — use `string` for url in the fetch mock
 
+## TypeScript 7
+
+- TS 7 (native Go compiler) does not auto-include `@types/*` — tsconfig requires `"types": ["bun"]` (it supplies `Bun`, `fetch`/`Response`, `console` globals; lib stays ESNext without DOM)
+- TS 7 removed `baseUrl` — use `paths` without it (resolves relative to the tsconfig file)
+
 ## CI and Dependabot
 
 - Merging Dependabot PRs that change `.github/workflows/*.yml` requires the `workflow` scope on the gh token — `gh auth refresh -h github.com -s workflow`
