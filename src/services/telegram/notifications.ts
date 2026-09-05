@@ -9,6 +9,20 @@ import type { Config } from '@/core/config/schema';
 import type { Drama } from '@/core/drama/fetcher';
 
 /**
+ * Экранирует HTML-спецсимволы для parse_mode: 'HTML'
+ *
+ * @param value - Строка для экранирования
+ * @returns Экранированная строка
+ */
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;');
+}
+
+/**
  * Собирает caption для сообщения
  *
  * @param drama - Дорама
@@ -16,9 +30,9 @@ import type { Drama } from '@/core/drama/fetcher';
  * @returns HTML-подпись
  */
 function buildCaption(drama: Drama, sourceName: string): string {
-  let caption = `<b>${drama.title}</b>\n<i>${sourceName}</i>`;
+  let caption = `<b>${escapeHtml(drama.title)}</b>\n<i>${escapeHtml(sourceName)}</i>`;
   if (drama.link) {
-    caption += `\n\n<a href="${drama.link}">Смотреть</a>`;
+    caption += `\n\n<a href="${escapeHtml(drama.link)}">Смотреть</a>`;
   }
   return caption;
 }

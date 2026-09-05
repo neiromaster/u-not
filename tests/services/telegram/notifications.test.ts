@@ -83,6 +83,31 @@ describe('sendTelegramNotification', () => {
     expect(sendPhoto).not.toHaveBeenCalled();
   });
 
+  test('экранирует спецсимволы HTML в caption', async () => {
+    await sendTelegramNotification(
+      { botToken: 'token', chatId: '-1001' },
+      new Map([
+        [
+          'Okko & Co',
+          [
+            {
+              title: 'Дорама <1> & 2',
+              posterUrl: 'https://img.example.com/poster.jpg',
+              link: 'https://example.com/?a=1&b=2',
+            },
+          ],
+        ],
+      ]),
+    );
+
+    const callArgs = sendPhoto.mock.calls[0] as any;
+    const caption = callArgs[2].caption;
+
+    expect(caption).toContain('<b>Дорама &lt;1&gt; &amp; 2</b>');
+    expect(caption).toContain('<i>Okko &amp; Co</i>');
+    expect(caption).toContain('href="https://example.com/?a=1&amp;b=2"');
+  });
+
   test('отправляет в каждый чат', async () => {
     await sendTelegramNotification(
       { botToken: 'token', chatId: ['-1001', '-1002'] },
