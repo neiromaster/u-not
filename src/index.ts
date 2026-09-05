@@ -55,7 +55,7 @@ async function main() {
 
   console.log('\n📊 Дорамы, полученные из источников:');
   for (const result of results) {
-    const sourceName = result.source.name ?? result.source.url;
+    const sourceName = result.source.name;
     console.log(`  - ${sourceName}: ${result.dramas.length} дорам`);
   }
   console.log('');
@@ -68,7 +68,7 @@ async function main() {
       (drama) => !existingDramas.has(drama.title),
     );
     if (newDramas.length > 0) {
-      newDramasBySource.set(result.source.name ?? result.source.url, newDramas);
+      newDramasBySource.set(result.source.name, newDramas);
       totalNewDramas += newDramas.length;
     }
   }
@@ -80,7 +80,7 @@ async function main() {
   } else {
     await appendNewDramas(newDramasBySource);
     await sendTelegramNotification(telegram, newDramasBySource);
-    await sendVkNotification(config.vk, newDramasBySource);
+    await sendVkNotification(config.vk, newDramasBySource, userAgent);
   }
 
   console.log('🏁 Работа скрипта завершена.');

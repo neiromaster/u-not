@@ -10,13 +10,24 @@ import type { Drama } from '@/core/drama/fetcher';
 const VK_API_URL = 'https://api.vk.com/method/';
 const DEFAULT_API_VERSION = '5.199';
 
+let lastRandomId = 0;
+
 /**
  * Генерирует уникальный random_id для предотвращения дубликатов
  *
- * @returns Уникальный идентификатор на основе текущего времени
+ * Монотонный счётчик: если Date.now() не вырос, инкрементируем предыдущее
+ * значение — гарантирует уникальность в рамках процесса.
+ *
+ * @returns Уникальный идентификатор
  */
 function generateRandomId(): number {
-  return Date.now() + Math.floor(Math.random() * 1000);
+  const now = Date.now();
+  if (now > lastRandomId) {
+    lastRandomId = now;
+  } else {
+    lastRandomId += 1;
+  }
+  return lastRandomId;
 }
 
 /**
@@ -78,9 +89,14 @@ async function uploadPhotoToVk(
   apiVersion: string,
   peerId: number,
   posterUrl: string,
+  userAgent?: string,
 ): Promise<string | null> {
   try {
-    const posterResponse = await fetch(posterUrl);
+    const headers: Record<string, string> = {};
+    if (userAgent) {
+      headers['User-Agent'] = userAgent;
+    }
+    const posterResponse = await fetch(posterUrl, { headers });
     if (!posterResponse.ok) {
       return null;
     }
@@ -100,6 +116,12 @@ async function uploadPhotoToVk(
       method: 'POST',
       body: form,
     });
+    if (!uploadResponse.ok) {
+      console.error(
+        `Ошибка при загрузке фото в VK: HTTP ${uploadResponse.status}`,
+      );
+      return null;
+    }
     const uploadJson = (await uploadResponse.json()) as {
       server: number;
       photo: string;
@@ -129,6 +151,21 @@ async function uploadPhotoToVk(
 }
 
 /**
+ * Нейтрализует VK-разметку в тексте, чтобы название дорамы или источника
+ * не сломало форматирование сообщения (жирный `**`, курсив `__`, ссылки `[url|text]`)
+ *
+ * @param value - Исходный текст
+ * @returns Текст без активной VK-разметки
+ */
+function neutralizeVkMarkdown(value: string): string {
+  return value
+    .replaceAll('**', '*')
+    .replaceAll('__', '_')
+    .replaceAll('[', '(')
+    .replaceAll(']', ')');
+}
+
+/**
  * Собирает текст сообщения
  *
  * @param drama - Дорама
@@ -136,7 +173,7 @@ async function uploadPhotoToVk(
  * @returns Текст сообщения
  */
 function buildMessage(drama: Drama, sourceName: string): string {
-  let message = `**${drama.title}**\n${sourceName}`;
+  let message = `**${neutralizeVkMarkdown(drama.title)}**\n${neutralizeVkMarkdown(sourceName)}`;
   if (drama.link) {
     message += `\n[${drama.link}|Смотреть]`;
   }
@@ -152,6 +189,7 @@ function buildMessage(drama: Drama, sourceName: string): string {
 export async function sendVkNotification(
   vk: Config['vk'],
   newDramasBySource: Map<string, Drama[]>,
+  userAgent?: string,
 ): Promise<void> {
   if (!vk) {
     console.log(
@@ -183,6 +221,7 @@ export async function sendVkNotification(
                 apiVersion,
                 peerId,
                 drama.posterUrl,
+                userAgent,
               )) ?? '';
           }
 
