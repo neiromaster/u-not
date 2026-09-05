@@ -12,7 +12,8 @@
     "verbatimModuleSyntax": true,
     "noEmit": true,
 
-    "baseUrl": ".",
+    "types": ["bun"],
+
     "paths": {
       "@/*": ["./src/*"]
     },

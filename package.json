@@ -20,7 +20,7 @@
     "build:macos-arm": "bun build ./src/index.ts --compile --outfile ./dist/u-not-darwin-arm64 --target bun-darwin-arm64"
   },
   "peerDependencies": {
-    "typescript": "^5"
+    "typescript": "^7.0.2"
   },
   "dependencies": {
     "grammy": "^1.46.0",
