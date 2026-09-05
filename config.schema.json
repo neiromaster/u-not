@@ -47,17 +47,27 @@
               "type": "string"
             }
           },
-          "flaresolverrUrl": {
-            "type": "string",
-            "format": "uri"
-          },
-          "flaresolverrApiKey": {
-            "type": "string"
+          "flaresolverr": {
+            "type": "boolean"
           }
         },
         "required": ["name", "url", "type", "jsonPath"],
         "additionalProperties": false
       }
+    },
+    "flaresolverr": {
+      "type": "object",
+      "properties": {
+        "url": {
+          "type": "string",
+          "format": "uri"
+        },
+        "api": {
+          "type": "string"
+        }
+      },
+      "required": ["url"],
+      "additionalProperties": false
     },
     "telegram": {
       "type": "object",

@@ -97,4 +97,71 @@ describe('validateConfig', () => {
 
     expect(() => validateConfig(config)).toThrow();
   });
+
+  test('принимает топ-уровневый flaresolverr с url и api', () => {
+    const config = {
+      sources: [
+        {
+          name: 'Okko',
+          url: 'https://example.com/api',
+          type: 'api',
+          jsonPath: 'result.*.title',
+          flaresolverr: true,
+        },
+      ],
+      flaresolverr: {
+        url: 'http://192.168.0.222:30098',
+        api: 'secret-key',
+      },
+    };
+
+    const result = validateConfig(config);
+    expect(result.flaresolverr?.url).toBe('http://192.168.0.222:30098');
+    expect(result.flaresolverr?.api).toBe('secret-key');
+    expect(result.sources[0]?.flaresolverr).toBe(true);
+  });
+
+  test('принимает flaresolverr без api', () => {
+    const config = {
+      sources: [
+        {
+          name: 'Okko',
+          url: 'https://example.com/api',
+          type: 'api',
+          jsonPath: 'result.*.title',
+        },
+      ],
+      flaresolverr: {
+        url: 'http://192.168.0.222:30098',
+      },
+    };
+
+    expect(() => validateConfig(config)).not.toThrow();
+  });
+
+  test('бросает ошибку при невалидном url в flaresolverr', () => {
+    const config = {
+      flaresolverr: {
+        url: 'not-a-url',
+      },
+    };
+
+    expect(() => validateConfig(config)).toThrow();
+  });
+
+  test('бросает ошибку, если источник использует flaresolverr, но он не настроен', () => {
+    const config = {
+      sources: [
+        {
+          name: 'Okko',
+          url: 'https://example.com/api',
+          type: 'api',
+          jsonPath: 'result.*.title',
+          flaresolverr: true,
+        },
+      ],
+    };
+
+    expect(() => validateConfig(config)).toThrow();
+  });
 });

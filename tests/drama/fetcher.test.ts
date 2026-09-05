@@ -17,6 +17,11 @@ const source: Source = {
 
 const originalFetch = globalThis.fetch;
 
+const flaresolverr = {
+  url: 'http://localhost:8190',
+  api: 'secret-key',
+};
+
 afterEach(() => {
   globalThis.fetch = originalFetch;
 });
@@ -274,7 +279,7 @@ test('передаёт User-Agent в заголовках запроса', async
   expect(headers['User-Agent']).toBe('test-agent');
 });
 
-test('извлекает дорамы через FlareSolverr из HTML-обёртки', async () => {
+test('извлекает дорамы через Flaresolverr из HTML-обёртки', async () => {
   globalThis.fetch = (() =>
     Promise.resolve(
       new Response(
@@ -289,16 +294,20 @@ test('извлекает дорамы через FlareSolverr из HTML-обёр
       ),
     )) as unknown as typeof fetch;
 
-  const flareSource: Source = {
+  const flaresolverrSource: Source = {
     ...source,
-    flaresolverrUrl: 'http://localhost:8190',
+    flaresolverr: true,
   };
 
-  const result = await fetchDramasFromSource(flareSource);
+  const result = await fetchDramasFromSource(
+    flaresolverrSource,
+    undefined,
+    flaresolverr,
+  );
   expect(result.dramas).toEqual([{ title: 'Дорама 1' }, { title: 'Дорама 2' }]);
 });
 
-test('извлекает дорамы через FlareSolverr из чистого JSON', async () => {
+test('извлекает дорамы через Flaresolverr из чистого JSON', async () => {
   globalThis.fetch = (() =>
     Promise.resolve(
       new Response(
@@ -311,16 +320,20 @@ test('извлекает дорамы через FlareSolverr из чистог�
       ),
     )) as unknown as typeof fetch;
 
-  const flareSource: Source = {
+  const flaresolverrSource: Source = {
     ...source,
-    flaresolverrUrl: 'http://localhost:8190',
+    flaresolverr: true,
   };
 
-  const result = await fetchDramasFromSource(flareSource);
+  const result = await fetchDramasFromSource(
+    flaresolverrSource,
+    undefined,
+    flaresolverr,
+  );
   expect(result.dramas).toEqual([{ title: 'Дорама 1' }]);
 });
 
-test('передаёт X-Api-Key в запрос к FlareSolverr', async () => {
+test('передаёт X-Api-Key в запрос к Flaresolverr', async () => {
   let capturedUrl = '';
   let capturedInit: RequestInit | undefined;
   globalThis.fetch = ((url: string, init?: RequestInit) => {
@@ -338,19 +351,18 @@ test('передаёт X-Api-Key в запрос к FlareSolverr', async () => {
     );
   }) as unknown as typeof fetch;
 
-  const flareSource: Source = {
+  const flaresolverrSource: Source = {
     ...source,
-    flaresolverrUrl: 'http://localhost:8190',
-    flaresolverrApiKey: 'secret-key',
+    flaresolverr: true,
   };
 
-  await fetchDramasFromSource(flareSource);
+  await fetchDramasFromSource(flaresolverrSource, undefined, flaresolverr);
   expect(capturedUrl).toBe('http://localhost:8190/v1');
   const headers = capturedInit?.headers as Record<string, string>;
   expect(headers['X-Api-Key']).toBe('secret-key');
 });
 
-test('бросает ошибку, если FlareSolverr вернул пустой ответ', async () => {
+test('бросает ошибку, если Flaresolverr вернул пустой ответ', async () => {
   globalThis.fetch = (() =>
     Promise.resolve(
       new Response(JSON.stringify({ solution: { response: '' } }), {
@@ -358,33 +370,33 @@ test('бросает ошибку, если FlareSolverr вернул пусто
       }),
     )) as unknown as typeof fetch;
 
-  const flareSource: Source = {
+  const flaresolverrSource: Source = {
     ...source,
-    flaresolverrUrl: 'http://localhost:8190',
+    flaresolverr: true,
   };
 
-  expect(fetchDramasFromSource(flareSource)).rejects.toThrow(
-    'FlareSolverr вернул пустой ответ',
-  );
+  expect(
+    fetchDramasFromSource(flaresolverrSource, undefined, flaresolverr),
+  ).rejects.toThrow('Flaresolverr вернул пустой ответ');
 });
 
-test('бросает ошибку при ошибке HTTP от FlareSolverr', async () => {
+test('бросает ошибку при ошибке HTTP от Flaresolverr', async () => {
   globalThis.fetch = (() =>
     Promise.resolve(
       new Response('Bad Gateway', { status: 502 }),
     )) as unknown as typeof fetch;
 
-  const flareSource: Source = {
+  const flaresolverrSource: Source = {
     ...source,
-    flaresolverrUrl: 'http://localhost:8190',
+    flaresolverr: true,
   };
 
-  expect(fetchDramasFromSource(flareSource)).rejects.toThrow(
-    'FlareSolverr HTTP 502',
-  );
+  expect(
+    fetchDramasFromSource(flaresolverrSource, undefined, flaresolverr),
+  ).rejects.toThrow('Flaresolverr HTTP 502');
 });
 
-test('декодирует HTML-сущности в JSON внутри <pre> от FlareSolverr', async () => {
+test('декодирует HTML-сущности в JSON внутри <pre> от Flaresolverr', async () => {
   globalThis.fetch = (() =>
     Promise.resolve(
       new Response(
@@ -398,12 +410,16 @@ test('декодирует HTML-сущности в JSON внутри <pre> от
       ),
     )) as unknown as typeof fetch;
 
-  const flareSource: Source = {
+  const flaresolverrSource: Source = {
     ...source,
-    flaresolverrUrl: 'http://localhost:8190',
+    flaresolverr: true,
   };
 
-  const result = await fetchDramasFromSource(flareSource);
+  const result = await fetchDramasFromSource(
+    flaresolverrSource,
+    undefined,
+    flaresolverr,
+  );
   expect(result.dramas).toEqual([{ title: 'Tom & Jerry <3' }]);
 });
 
@@ -420,17 +436,17 @@ test('бросает понятную ошибку, если JSON внутри <
       ),
     )) as unknown as typeof fetch;
 
-  const flareSource: Source = {
+  const flaresolverrSource: Source = {
     ...source,
-    flaresolverrUrl: 'http://localhost:8190',
+    flaresolverr: true,
   };
 
-  expect(fetchDramasFromSource(flareSource)).rejects.toThrow(
-    'не содержит JSON',
-  );
+  expect(
+    fetchDramasFromSource(flaresolverrSource, undefined, flaresolverr),
+  ).rejects.toThrow('не содержит JSON');
 });
 
-test('передаёт заголовки источника и User-Agent в запрос через FlareSolverr', async () => {
+test('передаёт заголовки источника и User-Agent в запрос через Flaresolverr', async () => {
   let capturedBody: Record<string, unknown> | undefined;
   globalThis.fetch = ((_url: string, init?: RequestInit) => {
     capturedBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
@@ -446,18 +462,18 @@ test('передаёт заголовки источника и User-Agent в з
     );
   }) as unknown as typeof fetch;
 
-  const flareSource: Source = {
+  const flaresolverrSource: Source = {
     ...source,
-    flaresolverrUrl: 'http://localhost:8190',
+    flaresolverr: true,
     headers: { session_id: 'abc123' },
   };
 
-  await fetchDramasFromSource(flareSource, 'test-agent');
+  await fetchDramasFromSource(flaresolverrSource, 'test-agent', flaresolverr);
   const headers = capturedBody?.headers as Record<string, string>;
   expect(headers).toEqual({ session_id: 'abc123', 'User-Agent': 'test-agent' });
 });
 
-test('включает причину из тела ошибки FlareSolverr при HTTP-ошибке', async () => {
+test('включает причину из тела ошибки Flaresolverr при HTTP-ошибке', async () => {
   globalThis.fetch = (() =>
     Promise.resolve(
       new Response(JSON.stringify({ error: 'Error solving the challenge' }), {
@@ -465,28 +481,30 @@ test('включает причину из тела ошибки FlareSolverr п
       }),
     )) as unknown as typeof fetch;
 
-  const flareSource: Source = {
+  const flaresolverrSource: Source = {
     ...source,
-    flaresolverrUrl: 'http://localhost:8190',
+    flaresolverr: true,
   };
 
-  expect(fetchDramasFromSource(flareSource)).rejects.toThrow(
-    'Error solving the challenge',
-  );
+  expect(
+    fetchDramasFromSource(flaresolverrSource, undefined, flaresolverr),
+  ).rejects.toThrow('Error solving the challenge');
 });
 
-test('бросает понятную ошибку, если FlareSolverr вернул не JSON', async () => {
+test('бросает понятную ошибку, если Flaresolverr вернул не JSON', async () => {
   globalThis.fetch = (() =>
     Promise.resolve(
-      new Response('<html>FlareSolverr error page</html>', { status: 200 }),
+      new Response('<html>Flaresolverr error page</html>', { status: 200 }),
     )) as unknown as typeof fetch;
 
-  const flareSource: Source = {
+  const flaresolverrSource: Source = {
     ...source,
-    flaresolverrUrl: 'http://localhost:8190',
+    flaresolverr: true,
   };
 
-  expect(fetchDramasFromSource(flareSource)).rejects.toThrow('не JSON');
+  expect(
+    fetchDramasFromSource(flaresolverrSource, undefined, flaresolverr),
+  ).rejects.toThrow('не JSON');
 });
 
 test('бросает ошибку, если целевой HTTP-статус в solution.status не 2xx', async () => {
@@ -500,15 +518,17 @@ test('бросает ошибку, если целевой HTTP-статус в 
       ),
     )) as unknown as typeof fetch;
 
-  const flareSource: Source = {
+  const flaresolverrSource: Source = {
     ...source,
-    flaresolverrUrl: 'http://localhost:8190',
+    flaresolverr: true,
   };
 
-  expect(fetchDramasFromSource(flareSource)).rejects.toThrow('404');
+  expect(
+    fetchDramasFromSource(flaresolverrSource, undefined, flaresolverr),
+  ).rejects.toThrow('404');
 });
 
-test('создаёт одну сессию FlareSolverr для всех источников и уничтожает её после', async () => {
+test('создаёт одну сессию Flaresolverr для всех источников и уничтожает её после', async () => {
   const calls: { cmd: string; session?: string }[] = [];
   globalThis.fetch = ((_url: string, init?: RequestInit) => {
     const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
@@ -543,15 +563,19 @@ test('создаёт одну сессию FlareSolverr для всех исто
   const a: Source = {
     ...source,
     name: 'Okko',
-    flaresolverrUrl: 'http://localhost:8190',
+    flaresolverr: true,
   };
   const b: Source = {
     ...source,
     name: 'Okko2',
-    flaresolverrUrl: 'http://localhost:8190',
+    flaresolverr: true,
   };
 
-  const { results, failedSources } = await fetchAllSources([a, b]);
+  const { results, failedSources } = await fetchAllSources(
+    [a, b],
+    undefined,
+    flaresolverr,
+  );
 
   const creates = calls.filter((c) => c.cmd === 'sessions.create');
   const destroys = calls.filter((c) => c.cmd === 'sessions.destroy');
@@ -564,7 +588,7 @@ test('создаёт одну сессию FlareSolverr для всех исто
   expect(results).toHaveLength(2);
 });
 
-test('без FlareSolverr fetchAllSources не создаёт сессий и возвращает результаты', async () => {
+test('без Flaresolverr fetchAllSources не создаёт сессий и возвращает результаты', async () => {
   let called = false;
   globalThis.fetch = ((_url: string, _init?: RequestInit) => {
     called = true;

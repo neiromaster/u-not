@@ -48,7 +48,11 @@ async function main() {
   const existingDramas = await getExistingDramas();
   console.log(`📝 Найдено ${existingDramas.size} дорам в текущем списке.`);
 
-  const { results, failedSources } = await fetchAllSources(sources, userAgent);
+  const { results, failedSources } = await fetchAllSources(
+    sources,
+    userAgent,
+    config.flaresolverr,
+  );
 
   console.log('\n📊 Дорамы, полученные из источников:');
   for (const result of results) {

@@ -19,8 +19,12 @@ const sourceSchema = z.object({
   posterBaseUrl: z.string().url().optional(),
   posterSize: z.string().optional(),
   headers: z.record(z.string(), z.string()).optional(),
-  flaresolverrUrl: z.string().url().optional(),
-  flaresolverrApiKey: z.string().optional(),
+  flaresolverr: z.boolean().optional(),
+});
+
+const flaresolverrConfigSchema = z.object({
+  url: z.string().url(),
+  api: z.string().optional(),
 });
 
 const telegramConfigSchema = z.object({
@@ -34,14 +38,29 @@ const vkConfigSchema = z.object({
   apiVersion: z.string().optional(),
 });
 
-export const configSchema = z.object({
-  sources: z.array(sourceSchema),
-  telegram: telegramConfigSchema.optional(),
-  vk: vkConfigSchema.optional(),
-  userAgent: z.string().optional(),
-});
+export const configSchema = z
+  .object({
+    sources: z.array(sourceSchema),
+    flaresolverr: flaresolverrConfigSchema.optional(),
+    telegram: telegramConfigSchema.optional(),
+    vk: vkConfigSchema.optional(),
+    userAgent: z.string().optional(),
+  })
+  .superRefine((config, ctx) => {
+    if (
+      !config.flaresolverr &&
+      config.sources.some((source) => source.flaresolverr)
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message:
+          'источники с flaresolverr: true требуют топ-уровневую настройку flaresolverr',
+      });
+    }
+  });
 
 export type Source = z.infer<typeof sourceSchema>;
+export type FlaresolverrConfig = z.infer<typeof flaresolverrConfigSchema>;
 export type Config = z.infer<typeof configSchema>;
 export type ChatId = z.infer<typeof chatIdSchema>;
 export type VkConfig = z.infer<typeof vkConfigSchema>;

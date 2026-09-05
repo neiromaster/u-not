@@ -61,9 +61,12 @@
       "posterJsonPath": "$.relation.element.collectionItems.items.*.element.basicCovers.items[?(@.imageType==\"PORTRAIT\")].url",
       "linkJsonPath": "$.relation.element.collectionItems.items.*.element.alias",
       "linkBaseUrl": "https://okko.tv/serial/",
-      "flaresolverrUrl": "http://192.168.0.222:30098"
+      "flaresolverr": true
     }
   ],
+  "flaresolverr": {
+    "url": "http://192.168.0.222:30098"
+  },
   "telegram": {
     "botToken": "",
     "chatId": ["-1001234567890"]

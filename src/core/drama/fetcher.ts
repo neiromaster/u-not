@@ -5,7 +5,11 @@
  */
 
 import { JSONPath } from 'jsonpath-plus';
-import type { Source } from '@/core/config/schema';
+import type { FlaresolverrConfig, Source } from '@/core/config/schema';
+
+function flaresolverrBaseUrl(flaresolverr: FlaresolverrConfig): string {
+  return flaresolverr.url.replace(/\/+$/, '');
+}
 
 const DEFAULT_POSTER_SIZE = '400x600';
 
@@ -91,7 +95,7 @@ async function fetchDirect(
  * а &, <, > экранируются в HTML-сущности. Возвращает объект из чистого JSON
  * или изнутри <pre>-обёртки.
  */
-function parseFlareSolverrBody(body: string): object {
+function parseFlaresolverrBody(body: string): object {
   try {
     return JSON.parse(body) as object;
   } catch {
@@ -100,10 +104,10 @@ function parseFlareSolverrBody(body: string): object {
       try {
         return JSON.parse(unescapeHtml(content)) as object;
       } catch {
-        throw new Error('ответ FlareSolverr не содержит JSON');
+        throw new Error('ответ Flaresolverr не содержит JSON');
       }
     }
-    throw new Error('ответ FlareSolverr не содержит JSON');
+    throw new Error('ответ Flaresolverr не содержит JSON');
   }
 }
 
@@ -120,7 +124,7 @@ function unescapeHtml(text: string): string {
     .replaceAll('&amp;', '&');
 }
 
-async function readFlareSolverrError(response: Response): Promise<string> {
+async function readFlaresolverrError(response: Response): Promise<string> {
   const body = await response.text();
   try {
     const json = JSON.parse(body) as { error?: string };
@@ -133,39 +137,32 @@ async function readFlareSolverrError(response: Response): Promise<string> {
   return body ? body.slice(0, 200) : response.statusText;
 }
 
-interface FlareSolverrSolution {
+interface FlaresolverrSolution {
   status?: number;
   response?: string;
 }
 
-interface FlareSolverrResponse {
-  solution?: FlareSolverrSolution;
+interface FlaresolverrResponse {
+  solution?: FlaresolverrSolution;
   error?: string;
 }
 
-function flareBaseUrl(source: Source): string {
-  const url = source.flaresolverrUrl;
-  if (!url) {
-    throw new Error(`Источник ${source.name}: не задан flaresolverrUrl`);
-  }
-  return url.replace(/\/+$/, '');
-}
-
 /**
- * Загружает JSON через FlareSolverr — обходит антибот-защиту,
+ * Загружает JSON через Flaresolverr — обходит антибот-защиту,
  * которая блокирует не-браузерные клиенты по TLS-fingerprint
  */
-async function fetchViaFlareSolverr(
+async function fetchViaFlaresolverr(
   source: Source,
-  userAgent?: string,
+  userAgent: string | undefined,
+  flaresolverr: FlaresolverrConfig,
   sessionId?: string,
 ): Promise<object> {
-  const base = flareBaseUrl(source);
+  const base = flaresolverrBaseUrl(flaresolverr);
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
   };
-  if (source.flaresolverrApiKey) {
-    headers['X-Api-Key'] = source.flaresolverrApiKey;
+  if (flaresolverr.api) {
+    headers['X-Api-Key'] = flaresolverr.api;
   }
 
   const targetHeaders: Record<string, string> = {};
@@ -193,23 +190,23 @@ async function fetchViaFlareSolverr(
   });
   if (!response.ok) {
     throw new Error(
-      `FlareSolverr HTTP ${response.status} ${await readFlareSolverrError(response)}`,
+      `Flaresolverr HTTP ${response.status} ${await readFlaresolverrError(response)}`,
     );
   }
 
-  let result: FlareSolverrResponse;
+  let result: FlaresolverrResponse;
   try {
-    result = (await response.json()) as FlareSolverrResponse;
+    result = (await response.json()) as FlaresolverrResponse;
   } catch {
     throw new Error(
-      `FlareSolverr вернул не JSON (HTTP ${response.status}). Возможно, это HTML-страница ошибки.`,
+      `Flaresolverr вернул не JSON (HTTP ${response.status}). Возможно, это HTML-страница ошибки.`,
     );
   }
 
   const solution = result.solution;
   if (!solution) {
     throw new Error(
-      `FlareSolverr вернул ошибку: ${result.error ?? 'нет solution'}`,
+      `Flaresolverr вернул ошибку: ${result.error ?? 'нет solution'}`,
     );
   }
 
@@ -219,25 +216,20 @@ async function fetchViaFlareSolverr(
 
   const flareBody = solution.response;
   if (typeof flareBody !== 'string' || flareBody.length === 0) {
-    throw new Error('FlareSolverr вернул пустой ответ');
+    throw new Error('Flaresolverr вернул пустой ответ');
   }
-  return parseFlareSolverrBody(flareBody);
+  return parseFlaresolverrBody(flareBody);
 }
 
-function sessionKey(source: Source): string | null {
-  if (!source.flaresolverrUrl) {
-    return null;
-  }
-  return `${source.flaresolverrUrl.replace(/\/+$/, '')}|${source.flaresolverrApiKey ?? ''}`;
-}
-
-async function createFlareSolverrSession(source: Source): Promise<string> {
-  const base = flareBaseUrl(source);
+async function createFlaresolverrSession(
+  flaresolverr: FlaresolverrConfig,
+): Promise<string> {
+  const base = flaresolverrBaseUrl(flaresolverr);
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
   };
-  if (source.flaresolverrApiKey) {
-    headers['X-Api-Key'] = source.flaresolverrApiKey;
+  if (flaresolverr.api) {
+    headers['X-Api-Key'] = flaresolverr.api;
   }
   const sessionId = crypto.randomUUID();
 
@@ -247,21 +239,21 @@ async function createFlareSolverrSession(source: Source): Promise<string> {
     body: JSON.stringify({ cmd: 'sessions.create', session: sessionId }),
   });
   if (!response.ok) {
-    throw new Error(`FlareSolverr sessions.create HTTP ${response.status}`);
+    throw new Error(`Flaresolverr sessions.create HTTP ${response.status}`);
   }
   return sessionId;
 }
 
-async function destroyFlareSolverrSession(
-  source: Source,
+async function destroyFlaresolverrSession(
+  flaresolverr: FlaresolverrConfig,
   sessionId: string,
 ): Promise<void> {
-  const base = flareBaseUrl(source);
+  const base = flaresolverrBaseUrl(flaresolverr);
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
   };
-  if (source.flaresolverrApiKey) {
-    headers['X-Api-Key'] = source.flaresolverrApiKey;
+  if (flaresolverr.api) {
+    headers['X-Api-Key'] = flaresolverr.api;
   }
 
   const response = await fetch(`${base}/v1`, {
@@ -270,37 +262,39 @@ async function destroyFlareSolverrSession(
     body: JSON.stringify({ cmd: 'sessions.destroy', session: sessionId }),
   });
   if (!response.ok) {
-    throw new Error(`FlareSolverr sessions.destroy HTTP ${response.status}`);
+    throw new Error(`Flaresolverr sessions.destroy HTTP ${response.status}`);
   }
 }
 
 /**
- * Загружает дорамы из всех источников. Для источников через FlareSolverr
- * создаётся одна сессия на сервер (переиспользуется между источниками,
- * чтобы не поднимать браузер на каждый запрос) и уничтожается по завершении.
+ * Загружает дорамы из всех источников. Для источников через Flaresolverr
+ * создаётся одна сессия (переиспользуется между источниками, чтобы не
+ * поднимать браузер на каждый запрос) и уничтожается по завершении.
+ *
+ * @param sources - Источники данных
+ * @param userAgent - Пользовательский агент (опционально)
+ * @param flaresolverr - Топ-уровневая конфигурация Flaresolverr
+ *                       (обязательна, если хоть один источник помечен flaresolverr)
  */
 export async function fetchAllSources(
   sources: Source[],
   userAgent?: string,
+  flaresolverr?: FlaresolverrConfig,
 ): Promise<FetchAllResult> {
-  const flareServers = new Map<string, Source>();
-  for (const source of sources) {
-    const key = sessionKey(source);
-    if (key !== null && !flareServers.has(key)) {
-      flareServers.set(key, source);
-    }
+  const usesFlaresolverr = sources.some((source) => source.flaresolverr);
+  if (usesFlaresolverr && !flaresolverr) {
+    throw new Error(
+      'источники используют Flaresolverr, но конфигурация flaresolverr не задана',
+    );
   }
 
-  const sessions = new Map<string, { source: Source; id: string }>();
-  for (const [key, source] of flareServers) {
+  let sessionId: string | undefined;
+  if (usesFlaresolverr && flaresolverr) {
     try {
-      sessions.set(key, {
-        source,
-        id: await createFlareSolverrSession(source),
-      });
+      sessionId = await createFlaresolverrSession(flaresolverr);
     } catch (error) {
       console.warn(
-        `⚠️ Не удалось создать сессию FlareSolverr для ${source.name}: ${error instanceof Error ? error.message : String(error)}. Продолжаем без неё.`,
+        `⚠️ Не удалось создать сессию Flaresolverr: ${error instanceof Error ? error.message : String(error)}. Продолжаем без неё.`,
       );
     }
   }
@@ -310,11 +304,14 @@ export async function fetchAllSources(
 
   try {
     const outcomes = await Promise.allSettled(
-      sources.map((source) => {
-        const key = sessionKey(source);
-        const sessionId = key !== null ? sessions.get(key)?.id : undefined;
-        return fetchDramasFromSource(source, userAgent, sessionId);
-      }),
+      sources.map((source) =>
+        fetchDramasFromSource(
+          source,
+          userAgent,
+          flaresolverr,
+          source.flaresolverr ? sessionId : undefined,
+        ),
+      ),
     );
     for (const [index, outcome] of outcomes.entries()) {
       if (outcome.status === 'fulfilled') {
@@ -328,15 +325,15 @@ export async function fetchAllSources(
       }
     }
   } finally {
-    await Promise.allSettled(
-      [...sessions.values()].map(({ source, id }) =>
-        destroyFlareSolverrSession(source, id).catch((error: unknown) => {
+    if (sessionId && flaresolverr) {
+      await destroyFlaresolverrSession(flaresolverr, sessionId).catch(
+        (error: unknown) => {
           console.warn(
-            `⚠️ Не удалось уничтожить сессию FlareSolverr: ${error instanceof Error ? error.message : String(error)}`,
+            `⚠️ Не удалось уничтожить сессию Flaresolverr: ${error instanceof Error ? error.message : String(error)}`,
           );
-        }),
-      ),
-    );
+        },
+      );
+    }
   }
 
   return { results, failedSources };
@@ -347,7 +344,8 @@ export async function fetchAllSources(
  *
  * @param source - Конфигурация источника данных
  * @param userAgent - Пользовательский агент для запроса (опционально)
- * @param flareSolverrSessionId - ID сессии FlareSolverr (опционально)
+ * @param flaresolverr - Топ-уровневая конфигурация Flaresolverr
+ * @param flaresolverrSessionId - ID сессии Flaresolverr (опционально)
  * @returns Объект с источником и списком дорам
  * @throws Ошибка, если запрос не удался или список дорам пуст —
  * пустой список означает, что API изменился или заблокировал запрос
@@ -360,19 +358,33 @@ export async function fetchAllSources(
  * и постер/ссылка будут молча потеряны (в лог попадёт предупреждение).
  * `posterBaseUrl` (как и `linkBaseUrl`) подставляется перед относительным
  * URL постера, если тот не начинается с `http`.
- * Если задан `flaresolverrUrl`, запрос идёт через FlareSolverr
- * (обход антибот-защиты); `flaresolverrApiKey` передаётся в заголовке
- * `X-Api-Key`, а `headers` и верхнеуровневый `userAgent` — в целевой запрос.
+ * Если источник помечен `flaresolverr: true`, запрос идёт через Flaresolverr
+ * (обход антибот-защиты); `flaresolverr.api` передаётся в заголовке `X-Api-Key`,
+ * а `headers` и верхнеуровневый `userAgent` — в целевой запрос.
  */
 export async function fetchDramasFromSource(
   source: Source,
   userAgent?: string,
-  flareSolverrSessionId?: string,
+  flaresolverr?: FlaresolverrConfig,
+  flaresolverrSessionId?: string,
 ): Promise<FetchedDramas> {
   try {
-    const json = source.flaresolverrUrl
-      ? await fetchViaFlareSolverr(source, userAgent, flareSolverrSessionId)
-      : await fetchDirect(source, userAgent);
+    let json: object;
+    if (source.flaresolverr) {
+      if (!flaresolverr) {
+        throw new Error(
+          'источник использует Flaresolverr, но конфигурация flaresolverr не задана',
+        );
+      }
+      json = await fetchViaFlaresolverr(
+        source,
+        userAgent,
+        flaresolverr,
+        flaresolverrSessionId,
+      );
+    } else {
+      json = await fetchDirect(source, userAgent);
+    }
     const objectPath = source.jsonPath.replace(/\.\w+$/, '');
     const toRelative = (path: string): string => {
       if (!path.startsWith(objectPath)) {
