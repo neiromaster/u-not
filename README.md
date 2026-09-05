@@ -45,10 +45,14 @@ src/
   "$schema": "https://raw.githubusercontent.com/neiromaster/u-not/main/config.schema.json",
   "sources": [
     {
-      "name": "Okko",
-      "url": "https://api2.ivi.ru/mobileapi/catalogue/v7/?app_version=870&country=12&fields=title&from=0&genre=212&sort=new&to=29&withpreorderable=1",
+      "name": "Amediateka",
+      "url": "https://api.amediateka.tech/...",
       "type": "api",
-      "jsonPath": "result.*.title"
+      "jsonPath": "results.*.title",
+      "posterJsonPath": "results.*.assets.productPoster",
+      "linkJsonPath": "results.*.webUrl",
+      "linkBaseUrl": "https://amediateka.ru",
+      "posterSize": "400x600"
     }
   ],
   "telegram": {

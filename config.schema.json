@@ -21,6 +21,19 @@
           "jsonPath": {
             "type": "string"
           },
+          "posterJsonPath": {
+            "type": "string"
+          },
+          "linkJsonPath": {
+            "type": "string"
+          },
+          "linkBaseUrl": {
+            "type": "string",
+            "format": "uri"
+          },
+          "posterSize": {
+            "type": "string"
+          },
           "headers": {
             "type": "object",
             "propertyNames": {

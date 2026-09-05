@@ -2,6 +2,16 @@
   "$schema": "https://raw.githubusercontent.com/neiromaster/u-not/main/config.schema.json",
   "sources": [
     {
+      "name": "Amediateka",
+      "url": "https://api.amediateka.tech/gateway/v1/cms/content/series/?deviceModel=Edge-141&deviceType=desktopWeb&deviceVendor=Apple&os=Mac%20OS&osVersion=10.15.7&browserVersion=141&browserType=Edge&platform=amediaWeb&supportLive=true&countries=33&ordering=-last_publish_date",
+      "type": "api",
+      "jsonPath": "results.*.title",
+      "posterJsonPath": "results.*.assets.productPoster",
+      "linkJsonPath": "results.*.webUrl",
+      "linkBaseUrl": "https://amediateka.ru",
+      "posterSize": "400x600"
+    },
+    {
       "name": "Example Source",
       "url": "https://example.com/api/dramas",
       "type": "api",

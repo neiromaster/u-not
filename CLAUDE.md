@@ -38,6 +38,7 @@ src/
 - Lefthook: pre-commit = biome + typecheck, pre-push = lint + typecheck + test; локально `bunx lefthook run <hook>` (не в PATH)
 - При критической ошибке приложение ждёт Enter перед выходом (не для CI)
 - `bun run lint` = `biome check --write` — модифицирует файлы
+- Источник может содержать `posterJsonPath`, `linkJsonPath`, `linkBaseUrl`, `posterSize` — постер и ссылка опциональны; `{SIZE}` в URL постера заменяется на `posterSize` (по умолчанию `400x600`)
 - `response.json()` в Bun возвращает `unknown` — кастуй к `object` для JSONPath
 
 ## APIs
