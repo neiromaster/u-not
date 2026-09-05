@@ -25,6 +25,9 @@ jobs:
       - name: Run typecheck
         run: bun run typecheck
 
+      - name: Run tests
+        run: bun run test
+
   build:
     name: Build binaries
     needs: check
