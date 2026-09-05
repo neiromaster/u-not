@@ -57,26 +57,12 @@
         "chatId": {
           "anyOf": [
             {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "number"
-                }
-              ]
+              "type": ["string", "number"]
             },
             {
               "type": "array",
               "items": {
-                "anyOf": [
-                  {
-                    "type": "string"
-                  },
-                  {
-                    "type": "number"
-                  }
-                ]
+                "type": ["string", "number"]
               }
             }
           ]
