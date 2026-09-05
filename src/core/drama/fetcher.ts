@@ -7,9 +7,42 @@
 import { JSONPath } from 'jsonpath-plus';
 import type { Source } from '@/core/config/schema';
 
+const DEFAULT_POSTER_SIZE = '400x600';
+
+export interface Drama {
+  title: string;
+  posterUrl?: string;
+  link?: string;
+}
+
 export interface FetchedDramas {
   source: Source;
-  titles: string[];
+  dramas: Drama[];
+}
+
+/**
+ * Заменяет плейсхолдер {SIZE} в URL постера на реальный размер
+ *
+ * @param url - URL постера
+ * @param posterSize - Размер постера
+ * @returns Нормализованный URL
+ */
+function normalizePosterUrl(url: string, posterSize: string): string {
+  return url.replaceAll('{SIZE}', posterSize);
+}
+
+/**
+ * Склеивает относительную ссылку с базовым доменом
+ *
+ * @param link - Ссылка из API
+ * @param linkBaseUrl - Базовый домен (опционально)
+ * @returns Полная ссылка
+ */
+function normalizeLink(link: string, linkBaseUrl?: string): string {
+  if (link.startsWith('http')) {
+    return link;
+  }
+  return linkBaseUrl ? linkBaseUrl + link : link;
 }
 
 /**
@@ -17,7 +50,7 @@ export interface FetchedDramas {
  *
  * @param source - Конфигурация источника данных
  * @param userAgent - Пользовательский агент для запроса (опционально)
- * @returns Объект с источником и списком названий дорам
+ * @returns Объект с источником и списком дорам
  */
 export async function fetchDramasFromSource(
   source: Source,
@@ -39,19 +72,45 @@ export async function fetchDramasFromSource(
       console.error(
         `Ошибка при загрузке ${source.url}: ${response.statusText}`,
       );
-      return { source, titles: [] };
+      return { source, dramas: [] };
     }
 
     const json = await response.json();
     const titles = JSONPath({ path: source.jsonPath, json: json as object });
-
-    const fetchedTitles = Array.isArray(titles)
-      ? titles.filter((t) => typeof t === 'string')
+    const posters = source.posterJsonPath
+      ? JSONPath({ path: source.posterJsonPath, json: json as object })
+      : [];
+    const links = source.linkJsonPath
+      ? JSONPath({ path: source.linkJsonPath, json: json as object })
       : [];
 
-    return { source, titles: fetchedTitles };
+    const posterSize = source.posterSize ?? DEFAULT_POSTER_SIZE;
+
+    const dramas: Drama[] = [];
+    for (let i = 0; i < titles.length; i++) {
+      const title = titles[i];
+      if (typeof title !== 'string') {
+        continue;
+      }
+
+      const drama: Drama = { title };
+
+      const poster = posters[i];
+      if (typeof poster === 'string') {
+        drama.posterUrl = normalizePosterUrl(poster, posterSize);
+      }
+
+      const link = links[i];
+      if (typeof link === 'string') {
+        drama.link = normalizeLink(link, source.linkBaseUrl);
+      }
+
+      dramas.push(drama);
+    }
+
+    return { source, dramas };
   } catch (error) {
     console.error(`Не удалось обработать источник ${source.url}:`, error);
-    return { source, titles: [] };
+    return { source, dramas: [] };
   }
 }

@@ -6,6 +6,7 @@
 
 export { configSchema, validateConfig } from '@/core/config/schema';
 export {
+  type Drama,
   type FetchedDramas,
   fetchDramasFromSource,
 } from '@/core/drama/fetcher';

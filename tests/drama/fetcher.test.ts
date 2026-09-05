@@ -21,7 +21,56 @@ afterEach(() => {
   globalThis.fetch = originalFetch;
 });
 
-test('извлекает названия дорам из ответа API', async () => {
+test('извлекает названия, постеры и ссылки', async () => {
+  globalThis.fetch = (() =>
+    Promise.resolve(
+      new Response(
+        JSON.stringify({
+          results: [
+            {
+              title: 'Дорама 1',
+              assets: {
+                productPoster: 'https://img.example.com/{SIZE}/poster1.jpg',
+              },
+              webUrl: '/watch/1',
+            },
+            {
+              title: 'Дорама 2',
+              assets: {
+                productPoster: 'https://img.example.com/{SIZE}/poster2.jpg',
+              },
+              webUrl: '/watch/2',
+            },
+          ],
+        }),
+        { status: 200 },
+      ),
+    )) as unknown as typeof fetch;
+
+  const richSource: Source = {
+    ...source,
+    jsonPath: 'results.*.title',
+    posterJsonPath: 'results.*.assets.productPoster',
+    linkJsonPath: 'results.*.webUrl',
+    linkBaseUrl: 'https://amediateka.ru',
+  };
+
+  const result = await fetchDramasFromSource(richSource);
+  expect(result.dramas).toEqual([
+    {
+      title: 'Дорама 1',
+      posterUrl: 'https://img.example.com/400x600/poster1.jpg',
+      link: 'https://amediateka.ru/watch/1',
+    },
+    {
+      title: 'Дорама 2',
+      posterUrl: 'https://img.example.com/400x600/poster2.jpg',
+      link: 'https://amediateka.ru/watch/2',
+    },
+  ]);
+});
+
+test('возвращает только названия без постеров и ссылок', async () => {
   globalThis.fetch = (() =>
     Promise.resolve(
       new Response(
@@ -33,7 +82,7 @@ test('извлекает названия дорам из ответа API', asy
     )) as unknown as typeof fetch;
 
   const result = await fetchDramasFromSource(source);
-  expect(result.titles).toEqual(['Дорама 1', 'Дорама 2']);
+  expect(result.dramas).toEqual([{ title: 'Дорама 1' }, { title: 'Дорама 2' }]);
 });
 
 test('возвращает пустой список при ошибке HTTP', async () => {
@@ -43,7 +92,7 @@ test('возвращает пустой список при ошибке HTTP', 
     )) as unknown as typeof fetch;
 
   const result = await fetchDramasFromSource(source);
-  expect(result.titles).toEqual([]);
+  expect(result.dramas).toEqual([]);
 });
 
 test('возвращает пустой список при ошибке сети', async () => {
@@ -51,7 +100,7 @@ test('возвращает пустой список при ошибке сет�
     Promise.reject(new Error('network error'))) as unknown as typeof fetch;
 
   const result = await fetchDramasFromSource(source);
-  expect(result.titles).toEqual([]);
+  expect(result.dramas).toEqual([]);
 });
 
 test('передаёт User-Agent в заголовках запроса', async () => {
