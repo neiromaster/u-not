@@ -76,33 +76,45 @@ export async function fetchDramasFromSource(
     }
 
     const json = await response.json();
-    const titles = JSONPath({ path: source.jsonPath, json: json as object });
-    const posters = source.posterJsonPath
-      ? JSONPath({ path: source.posterJsonPath, json: json as object })
-      : [];
-    const links = source.linkJsonPath
-      ? JSONPath({ path: source.linkJsonPath, json: json as object })
-      : [];
+    const objectPath = source.jsonPath.replace(/\.\w+$/, '');
+    const toRelative = (path: string): string =>
+      path.slice(objectPath.length).replace(/^\./, '');
+    const titlePath = toRelative(source.jsonPath);
+    const posterPath = source.posterJsonPath
+      ? toRelative(source.posterJsonPath)
+      : undefined;
+    const linkPath = source.linkJsonPath
+      ? toRelative(source.linkJsonPath)
+      : undefined;
+
+    const items = JSONPath({
+      path: objectPath,
+      json: json as object,
+    }) as Record<string, unknown>[];
 
     const posterSize = source.posterSize ?? DEFAULT_POSTER_SIZE;
 
     const dramas: Drama[] = [];
-    for (let i = 0; i < titles.length; i++) {
-      const title = titles[i];
+    for (const item of items) {
+      const title = JSONPath({ path: titlePath, json: item })[0];
       if (typeof title !== 'string') {
         continue;
       }
 
       const drama: Drama = { title };
 
-      const poster = posters[i];
-      if (typeof poster === 'string') {
-        drama.posterUrl = normalizePosterUrl(poster, posterSize);
+      if (posterPath) {
+        const poster = JSONPath({ path: posterPath, json: item })[0];
+        if (typeof poster === 'string') {
+          drama.posterUrl = normalizePosterUrl(poster, posterSize);
+        }
       }
 
-      const link = links[i];
-      if (typeof link === 'string') {
-        drama.link = normalizeLink(link, source.linkBaseUrl);
+      if (linkPath) {
+        const link = JSONPath({ path: linkPath, json: item })[0];
+        if (typeof link === 'string') {
+          drama.link = normalizeLink(link, source.linkBaseUrl);
+        }
       }
 
       dramas.push(drama);
