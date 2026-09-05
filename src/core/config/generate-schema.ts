@@ -1,6 +1,11 @@
-import { writeFileSync } from 'fs';
+/**
+ * Генерация JSON-схемы конфигурации
+ *
+ * @module config/generate-schema
+ */
+
 import { z } from 'zod';
-import { configSchema } from './config';
+import { configSchema } from './schema';
 
 const jsonSchema = z.toJSONSchema(configSchema, {
   override: (ctx) => {
@@ -10,6 +15,6 @@ const jsonSchema = z.toJSONSchema(configSchema, {
   },
 });
 
-writeFileSync('config.schema.json', JSON.stringify(jsonSchema, null, 2));
+await Bun.write('config.schema.json', JSON.stringify(jsonSchema, null, 2));
 
 console.log('JSON schema generated successfully!');

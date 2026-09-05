@@ -1,3 +1,9 @@
+/**
+ * Конфигурация схемы для валидации конфигурационного файла
+ *
+ * @module config/schema
+ */
+
 import { z } from 'zod';
 
 const chatIdSchema = z.union([z.string(), z.number()]);
@@ -25,6 +31,13 @@ export type Source = z.infer<typeof sourceSchema>;
 export type Config = z.infer<typeof configSchema>;
 export type ChatId = z.infer<typeof chatIdSchema>;
 
+/**
+ * Валидирует конфигурацию и возвращает отвалидированные данные
+ *
+ * @param config - Необработанная конфигурация для валидации
+ * @returns Отвалидированная конфигурация
+ * @throws Ошибка валидации если конфигурация неверна
+ */
 export function validateConfig(config: unknown): Config {
   const result = configSchema.safeParse(config);
   if (!result.success) {
