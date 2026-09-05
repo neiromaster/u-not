@@ -52,6 +52,16 @@
       "headers": {
         "session_id": "YOUR_WINK_SESSION_ID"
       }
+    },
+    {
+      "name": "Okko",
+      "url": "https://ctx.playfamily.ru/screenapi/v5/noauth/collection/web/8?elementAlias=dorama_series_cat&elementType=COLLECTION&maxResults=41&withInnerCollections=true&includeProductsForUpsale=false&filter=%7B%22sortOrder%22%3A%22DESC%22%2C%22sortType%22%3A%22DATE%22%7D",
+      "type": "api",
+      "jsonPath": "$.relation.element.collectionItems.items.*.element.name",
+      "posterJsonPath": "$.relation.element.collectionItems.items.*.element.basicCovers.items[?(@.imageType==\"PORTRAIT\")].url",
+      "linkJsonPath": "$.relation.element.collectionItems.items.*.element.alias",
+      "linkBaseUrl": "https://okko.tv/serial/",
+      "flaresolverrUrl": "http://192.168.0.222:30098"
     }
   ],
   "telegram": {

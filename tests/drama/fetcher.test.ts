@@ -273,3 +273,113 @@ test('передаёт User-Agent в заголовках запроса', async
   const headers = capturedInit?.headers as Record<string, string>;
   expect(headers['User-Agent']).toBe('test-agent');
 });
+
+test('извлекает дорамы через FlareSolverr из HTML-обёртки', async () => {
+  globalThis.fetch = (() =>
+    Promise.resolve(
+      new Response(
+        JSON.stringify({
+          solution: {
+            response: `<html><body><pre>${JSON.stringify({
+              result: [{ title: 'Дорама 1' }, { title: 'Дорама 2' }],
+            })}</pre></body></html>`,
+          },
+        }),
+        { status: 200 },
+      ),
+    )) as unknown as typeof fetch;
+
+  const flareSource: Source = {
+    ...source,
+    flaresolverrUrl: 'http://localhost:8190',
+  };
+
+  const result = await fetchDramasFromSource(flareSource);
+  expect(result.dramas).toEqual([{ title: 'Дорама 1' }, { title: 'Дорама 2' }]);
+});
+
+test('извлекает дорамы через FlareSolverr из чистого JSON', async () => {
+  globalThis.fetch = (() =>
+    Promise.resolve(
+      new Response(
+        JSON.stringify({
+          solution: {
+            response: JSON.stringify({ result: [{ title: 'Дорама 1' }] }),
+          },
+        }),
+        { status: 200 },
+      ),
+    )) as unknown as typeof fetch;
+
+  const flareSource: Source = {
+    ...source,
+    flaresolverrUrl: 'http://localhost:8190',
+  };
+
+  const result = await fetchDramasFromSource(flareSource);
+  expect(result.dramas).toEqual([{ title: 'Дорама 1' }]);
+});
+
+test('передаёт X-Api-Key в запрос к FlareSolverr', async () => {
+  let capturedUrl = '';
+  let capturedInit: RequestInit | undefined;
+  globalThis.fetch = ((url: string, init?: RequestInit) => {
+    capturedUrl = url;
+    capturedInit = init;
+    return Promise.resolve(
+      new Response(
+        JSON.stringify({
+          solution: {
+            response: JSON.stringify({ result: [{ title: 'Дорама 1' }] }),
+          },
+        }),
+        { status: 200 },
+      ),
+    );
+  }) as unknown as typeof fetch;
+
+  const flareSource: Source = {
+    ...source,
+    flaresolverrUrl: 'http://localhost:8190',
+    flaresolverrApiKey: 'secret-key',
+  };
+
+  await fetchDramasFromSource(flareSource);
+  expect(capturedUrl).toBe('http://localhost:8190/v1');
+  const headers = capturedInit?.headers as Record<string, string>;
+  expect(headers['X-Api-Key']).toBe('secret-key');
+});
+
+test('бросает ошибку, если FlareSolverr вернул пустой ответ', async () => {
+  globalThis.fetch = (() =>
+    Promise.resolve(
+      new Response(JSON.stringify({ solution: { response: '' } }), {
+        status: 200,
+      }),
+    )) as unknown as typeof fetch;
+
+  const flareSource: Source = {
+    ...source,
+    flaresolverrUrl: 'http://localhost:8190',
+  };
+
+  expect(fetchDramasFromSource(flareSource)).rejects.toThrow(
+    'FlareSolverr вернул пустой ответ',
+  );
+});
+
+test('бросает ошибку при ошибке HTTP от FlareSolverr', async () => {
+  globalThis.fetch = (() =>
+    Promise.resolve(
+      new Response('Bad Gateway', { status: 502 }),
+    )) as unknown as typeof fetch;
+
+  const flareSource: Source = {
+    ...source,
+    flaresolverrUrl: 'http://localhost:8190',
+  };
+
+  expect(fetchDramasFromSource(flareSource)).rejects.toThrow(
+    'FlareSolverr HTTP 502',
+  );
+});

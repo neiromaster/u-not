@@ -46,6 +46,13 @@
             "additionalProperties": {
               "type": "string"
             }
+          },
+          "flaresolverrUrl": {
+            "type": "string",
+            "format": "uri"
+          },
+          "flaresolverrApiKey": {
+            "type": "string"
           }
         },
         "required": ["name", "url", "type", "jsonPath"],

@@ -19,6 +19,8 @@ const sourceSchema = z.object({
   posterBaseUrl: z.string().url().optional(),
   posterSize: z.string().optional(),
   headers: z.record(z.string(), z.string()).optional(),
+  flaresolverrUrl: z.string().url().optional(),
+  flaresolverrApiKey: z.string().optional(),
 });
 
 const telegramConfigSchema = z.object({

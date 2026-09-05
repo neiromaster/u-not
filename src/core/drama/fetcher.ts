@@ -56,6 +56,84 @@ function normalizeLink(link: string, linkBaseUrl?: string): string {
 }
 
 /**
+ * Загружает JSON напрямую из источника
+ */
+async function fetchDirect(
+  source: Source,
+  userAgent?: string,
+): Promise<object> {
+  const headers: Record<string, string> = {};
+
+  if (userAgent) {
+    headers['User-Agent'] = userAgent;
+  }
+
+  if (source.headers) {
+    Object.assign(headers, source.headers);
+  }
+
+  const response = await fetch(source.url, { headers });
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status} ${response.statusText}`);
+  }
+  return (await response.json()) as object;
+}
+
+/**
+ * Извлекает JSON из тела ответа FlareSolverr: браузер рендерит JSON
+ * как страницу, поэтому тело может быть обёрнуто в <pre>...</pre>
+ */
+function parseFlareSolverrBody(body: string): object {
+  try {
+    return JSON.parse(body) as object;
+  } catch {
+    const content = body.match(/<pre>([\s\S]*?)<\/pre>/)?.[1];
+    if (content) {
+      return JSON.parse(content) as object;
+    }
+    throw new Error('ответ FlareSolverr не содержит JSON');
+  }
+}
+
+/**
+ * Загружает JSON через FlareSolverr — обходит антибот-защиту,
+ * которая блокирует не-браузерные клиенты по TLS-fingerprint
+ */
+async function fetchViaFlareSolverr(source: Source): Promise<object> {
+  const base = source.flaresolverrUrl!.replace(/\/+$/, '');
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+  if (source.flaresolverrApiKey) {
+    headers['X-Api-Key'] = source.flaresolverrApiKey;
+  }
+
+  const response = await fetch(`${base}/v1`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      cmd: 'request.get',
+      url: source.url,
+      maxTimeout: 60000,
+    }),
+  });
+  if (!response.ok) {
+    throw new Error(
+      `FlareSolverr HTTP ${response.status} ${response.statusText}`,
+    );
+  }
+
+  const result = (await response.json()) as {
+    solution?: { response?: string };
+  };
+  const body = result.solution?.response;
+  if (typeof body !== 'string' || body.length === 0) {
+    throw new Error('FlareSolverr вернул пустой ответ');
+  }
+  return parseFlareSolverrBody(body);
+}
+
+/**
  * Загружает дорамы из указанного источника
  *
  * @param source - Конфигурация источника данных
@@ -72,28 +150,18 @@ function normalizeLink(link: string, linkBaseUrl?: string): string {
  * и постер/ссылка будут молча потеряны (в лог попадёт предупреждение).
  * `posterBaseUrl` (как и `linkBaseUrl`) подставляется перед относительным
  * URL постера, если тот не начинается с `http`.
+ * Если задан `flaresolverrUrl`, запрос идёт через FlareSolverr
+ * (обход антибот-защиты); `flaresolverrApiKey` передаётся в заголовке
+ * `X-Api-Key`.
  */
 export async function fetchDramasFromSource(
   source: Source,
   userAgent?: string,
 ): Promise<FetchedDramas> {
   try {
-    const headers: Record<string, string> = {};
-
-    if (userAgent) {
-      headers['User-Agent'] = userAgent;
-    }
-
-    if (source.headers) {
-      Object.assign(headers, source.headers);
-    }
-
-    const response = await fetch(source.url, { headers });
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status} ${response.statusText}`);
-    }
-
-    const json = await response.json();
+    const json = source.flaresolverrUrl
+      ? await fetchViaFlareSolverr(source)
+      : await fetchDirect(source, userAgent);
     const objectPath = source.jsonPath.replace(/\.\w+$/, '');
     const toRelative = (path: string): string => {
       if (!path.startsWith(objectPath)) {
@@ -113,7 +181,7 @@ export async function fetchDramasFromSource(
 
     const items = JSONPath({
       path: objectPath,
-      json: json as object,
+      json,
     }) as Record<string, unknown>[];
 
     const posterSize = source.posterSize ?? DEFAULT_POSTER_SIZE;
