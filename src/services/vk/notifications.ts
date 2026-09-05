@@ -7,7 +7,7 @@
 import type { Config } from '@/core/config/schema';
 import type { Drama } from '@/core/drama/fetcher';
 
-const VK_API_URL = 'https://api.vk.com/method/messages.send';
+const VK_API_URL = 'https://api.vk.com/method/';
 const DEFAULT_API_VERSION = '5.199';
 
 /**
@@ -17,6 +17,129 @@ const DEFAULT_API_VERSION = '5.199';
  */
 function generateRandomId(): number {
   return Date.now() + Math.floor(Math.random() * 1000);
+}
+
+/**
+ * Вызывает метод VK API
+ *
+ * @param method - Имя метода (например, messages.send)
+ * @param accessToken - Токен сообщества
+ * @param apiVersion - Версия API
+ * @param params - Параметры метода
+ * @returns Ответ метода (поле response)
+ * @throws Ошибка при HTTP-сбое или ошибке API
+ */
+async function callVkApi(
+  method: string,
+  accessToken: string,
+  apiVersion: string,
+  params: Record<string, string> = {},
+): Promise<unknown> {
+  const body = new URLSearchParams({
+    access_token: accessToken,
+    v: apiVersion,
+    ...params,
+  });
+
+  const response = await fetch(`${VK_API_URL}${method}`, {
+    method: 'POST',
+    body,
+  });
+
+  if (!response.ok) {
+    throw new Error(`VK API HTTP ${response.status}`);
+  }
+
+  const json = (await response.json()) as {
+    response?: unknown;
+    error?: { error_code?: number; error_msg?: string };
+  };
+
+  if (json.error) {
+    throw new Error(
+      `VK API error ${json.error.error_code}: ${json.error.error_msg}`,
+    );
+  }
+
+  return json.response;
+}
+
+/**
+ * Скачивает постер и загружает его в VK
+ *
+ * @param accessToken - Токен сообщества
+ * @param apiVersion - Версия API
+ * @param peerId - ID беседы
+ * @param posterUrl - URL постера
+ * @returns Строка attachment (photo{owner_id}_{id}_{access_key}) или null при ошибке
+ */
+async function uploadPhotoToVk(
+  accessToken: string,
+  apiVersion: string,
+  peerId: number,
+  posterUrl: string,
+): Promise<string | null> {
+  try {
+    const posterResponse = await fetch(posterUrl);
+    if (!posterResponse.ok) {
+      return null;
+    }
+    const blob = await posterResponse.blob();
+
+    const uploadServer = (await callVkApi(
+      'photos.getMessagesUploadServer',
+      accessToken,
+      apiVersion,
+      { peer_id: String(peerId) },
+    )) as { upload_url: string };
+
+    const form = new FormData();
+    form.append('photo', blob as unknown as Blob, 'poster.jpg');
+    const uploadResponse = await fetch(uploadServer.upload_url, {
+      method: 'POST',
+      body: form,
+    });
+    const uploadJson = (await uploadResponse.json()) as {
+      server: number;
+      photo: string;
+      hash: string;
+    };
+
+    const saved = (await callVkApi(
+      'photos.saveMessagesPhoto',
+      accessToken,
+      apiVersion,
+      {
+        server: String(uploadJson.server),
+        photo: uploadJson.photo,
+        hash: uploadJson.hash,
+      },
+    )) as Array<{ owner_id: number; id: number; access_key: string }>;
+
+    const photo = saved[0];
+    if (!photo) {
+      return null;
+    }
+    return `photo${photo.owner_id}_${photo.id}_${photo.access_key}`;
+  } catch (error) {
+    console.error('Ошибка при загрузке постера в VK:', error);
+    return null;
+  }
+}
+
+/**
+ * Собирает текст сообщения
+ *
+ * @param drama - Дорама
+ * @param sourceName - Название источника
+ * @returns Текст сообщения
+ */
+function buildMessage(drama: Drama, sourceName: string): string {
+  let message = `**${drama.title}**\n${sourceName}`;
+  if (drama.link) {
+    message += `\n[${drama.link}|Смотреть]`;
+  }
+  return message;
 }
 
 /**
@@ -45,55 +168,41 @@ export async function sendVkNotification(
     return;
   }
 
-  let message = `✨ Найдены новые дорамы!\n\n`;
-
-  for (const [sourceName, dramas] of newDramasBySource.entries()) {
-    message += `**${sourceName}:**\n`;
-    message += dramas.map((d) => `• ${d.title}`).join('\n');
-    message += '\n\n';
-  }
-
   const ids = Array.isArray(peerIds) ? peerIds : [peerIds];
 
   for (const peerId of ids) {
-    try {
-      const params = new URLSearchParams({
-        access_token: accessToken,
-        v: apiVersion,
-        peer_id: String(peerId),
-        message,
-        random_id: String(generateRandomId()),
-      });
+    for (const [sourceName, dramas] of newDramasBySource.entries()) {
+      for (const drama of dramas) {
+        try {
+          let attachment = '';
+          if (drama.posterUrl) {
+            attachment =
+              (await uploadPhotoToVk(
+                accessToken,
+                apiVersion,
+                peerId,
+                drama.posterUrl,
+              )) ?? '';
+          }
 
-      const response = await fetch(VK_API_URL, {
-        method: 'POST',
-        body: params,
-      });
+          const message = buildMessage(drama, sourceName);
+          await callVkApi('messages.send', accessToken, apiVersion, {
+            peer_id: String(peerId),
+            message,
+            random_id: String(generateRandomId()),
+            ...(attachment ? { attachment } : {}),
+          });
 
-      if (!response.ok) {
-        console.error(
-          `Ошибка при отправке уведомления в VK в беседу ${peerId}: HTTP ${response.status}`,
-        );
-        continue;
+          console.log(
+            `📤 Уведомление в VK успешно отправлено в беседу ${peerId}.`,
+          );
+        } catch (error) {
+          console.error(
+            `Ошибка при отправке уведомления в VK в беседу ${peerId}:`,
+            error,
+          );
+        }
       }
-
-      const json = (await response.json()) as {
-        error?: { error_code?: number; error_msg?: string };
-      };
-
-      if (json.error) {
-        console.error(
-          `Ошибка при отправке уведомления в VK в беседу ${peerId}: ${json.error.error_code} ${json.error.error_msg}`,
-        );
-        continue;
-      }
-
-      console.log(`📤 Уведомление в VK успешно отправлено в беседу ${peerId}.`);
-    } catch (error) {
-      console.error(
-        `Ошибка при отправке уведомления в VK в беседу ${peerId}:`,
-        error,
-      );
     }
   }
 }

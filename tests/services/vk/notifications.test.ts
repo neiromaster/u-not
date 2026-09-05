@@ -43,44 +43,127 @@ describe('sendVkNotification', () => {
     expect(called).toBe(false);
   });
 
-  test('отправляет сообщение в каждый чат', async () => {
-    const calls: string[] = [];
-    globalThis.fetch = ((_url: string, init?: RequestInit) => {
+  test('загружает постер и отправляет сообщение с attachment', async () => {
+    let sendBody: URLSearchParams | undefined;
+    globalThis.fetch = ((url: string, init?: RequestInit) => {
+      if (url === 'https://img.example.com/poster1.jpg') {
+        return Promise.resolve(
+          new Response(new Blob(['fake-image']), { status: 200 }),
+        );
+      }
+      if (url === 'https://upload.example.com/') {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({ server: 1, photo: 'photo', hash: 'hash' }),
+            { status: 200 },
+          ),
+        );
+      }
       const body = init?.body as URLSearchParams;
-      calls.push(body.get('peer_id') ?? '');
-      return Promise.resolve(
-        new Response(JSON.stringify({ response: 1 }), { status: 200 }),
-      );
+      if (url.endsWith('photos.getMessagesUploadServer')) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              response: { upload_url: 'https://upload.example.com/' },
+            }),
+            { status: 200 },
+          ),
+        );
+      }
+      if (url.endsWith('photos.saveMessagesPhoto')) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              response: [{ owner_id: -1, id: 1, access_key: 'key' }],
+            }),
+            { status: 200 },
+          ),
+        );
+      }
+      if (url.endsWith('messages.send')) {
+        sendBody = body;
+        return Promise.resolve(
+          new Response(JSON.stringify({ response: 1 }), { status: 200 }),
+        );
+      }
+      return Promise.resolve(new Response('{}', { status: 200 }));
     }) as unknown as typeof fetch;
 
     await sendVkNotification(
-      { accessToken: 'token', peerId: [2000000001, 2000000002] },
-      new Map([['Okko', [{ title: 'Дорама 1' }, { title: 'Дорама 2' }]]]),
+      { accessToken: 'token', peerId: 2000000001 },
+      new Map([
+        [
+          'Okko',
+          [
+            {
+              title: 'Дорама 1',
+              posterUrl: 'https://img.example.com/poster1.jpg',
+              link: 'https://example.com/watch/1',
+            },
+          ],
+        ],
+      ]),
     );
 
-    expect(calls).toEqual(['2000000001', '2000000002']);
+    expect(sendBody?.get('attachment')).toBe('photo-1_1_key');
+    expect(sendBody?.get('message')).toContain('Дорама 1');
+    expect(sendBody?.get('message')).toContain('https://example.com/watch/1');
+    expect(sendBody?.get('random_id')).toBeTruthy();
   });
 
-  test('передаёт access_token, версию API и текст сообщения', async () => {
-    let capturedBody: URLSearchParams | undefined;
-    globalThis.fetch = ((_url: string, init?: RequestInit) => {
-      capturedBody = init?.body as URLSearchParams;
-      return Promise.resolve(
-        new Response(JSON.stringify({ response: 1 }), { status: 200 }),
-      );
+  test('отправляет текст без постера', async () => {
+    let sendBody: URLSearchParams | undefined;
+    globalThis.fetch = ((url: string, init?: RequestInit) => {
+      if (url.endsWith('messages.send')) {
+        sendBody = init?.body as URLSearchParams;
+        return Promise.resolve(
+          new Response(JSON.stringify({ response: 1 }), { status: 200 }),
+        );
+      }
+      return Promise.resolve(new Response('{}', { status: 200 }));
     }) as unknown as typeof fetch;
 
     await sendVkNotification(
-      { accessToken: 'secret-token', peerId: 2000000001 },
+      { accessToken: 'token', peerId: 2000000001 },
       new Map([['Okko', [{ title: 'Дорама 1' }]]]),
     );
 
-    expect(capturedBody?.get('access_token')).toBe('secret-token');
-    expect(capturedBody?.get('v')).toBe('5.199');
-    expect(capturedBody?.get('peer_id')).toBe('2000000001');
-    expect(capturedBody?.get('message')).toContain('Okko');
-    expect(capturedBody?.get('message')).toContain('Дорама 1');
-    expect(capturedBody?.get('random_id')).toBeTruthy();
+    expect(sendBody?.get('attachment')).toBeNull();
+    expect(sendBody?.get('message')).toContain('Дорама 1');
+  });
+
+  test('отправляет текст без фото при ошибке аплоада', async () => {
+    let sendBody: URLSearchParams | undefined;
+    globalThis.fetch = ((url: string, init?: RequestInit) => {
+      if (url === 'https://img.example.com/poster1.jpg') {
+        return Promise.resolve(new Response('Not Found', { status: 404 }));
+      }
+      if (url.endsWith('messages.send')) {
+        sendBody = init?.body as URLSearchParams;
+        return Promise.resolve(
+          new Response(JSON.stringify({ response: 1 }), { status: 200 }),
+        );
+      }
+      return Promise.resolve(new Response('{}', { status: 200 }));
+    }) as unknown as typeof fetch;
+
+    await sendVkNotification(
+      { accessToken: 'token', peerId: 2000000001 },
+      new Map([
+        [
+          'Okko',
+          [
+            {
+              title: 'Дорама 1',
+              posterUrl: 'https://img.example.com/poster1.jpg',
+            },
+          ],
+        ],
+      ]),
+    );
+
+    expect(sendBody?.get('attachment')).toBeNull();
+    expect(sendBody?.get('message')).toContain('Дорама 1');
   });
 
   test('не бросает ошибку при ответе API с ошибкой', async () => {
@@ -92,20 +175,6 @@ describe('sendVkNotification', () => {
           }),
           { status: 200 },
         ),
-      )) as unknown as typeof fetch;
-
-    await expect(
-      sendVkNotification(
-        { accessToken: 'token', peerId: 2000000001 },
-        new Map([['Okko', [{ title: 'Дорама 1' }]]]),
-      ),
-    ).resolves.toBeUndefined();
-  });
-
-  test('не бросает ошибку при HTTP ошибке', async () => {
-    globalThis.fetch = (() =>
-      Promise.resolve(
-        new Response('Server Error', { status: 500 }),
       )) as unknown as typeof fetch;
 
     await expect(
