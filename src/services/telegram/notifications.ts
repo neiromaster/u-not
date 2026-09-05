@@ -9,6 +9,21 @@ import type { Config } from '@/core/config/schema';
 import type { Drama } from '@/core/drama/fetcher';
 
 /**
+ * Собирает caption для сообщения
+ *
+ * @param drama - Дорама
+ * @param sourceName - Название источника
+ * @returns HTML-подпись
+ */
+function buildCaption(drama: Drama, sourceName: string): string {
+  let caption = `<b>${drama.title}</b>\n<i>${sourceName}</i>`;
+  if (drama.link) {
+    caption += `\n\n<a href="${drama.link}">Смотреть</a>`;
+  }
+  return caption;
+}
+
+/**
  * Отправляет уведомление в Telegram
  *
  * @param telegram - Конфигурация Telegram
@@ -39,27 +54,33 @@ export async function sendTelegramNotification(
   }
 
   const bot = new Bot(botToken);
-  let message = `<b>✨ Найдены новые дорамы!</b>\n\n`;
-
-  for (const [sourceName, dramas] of newDramasBySource.entries()) {
-    message += `<b>${sourceName}:</b>\n`;
-    message += dramas.map((d) => `• ${d.title}`).join('\n');
-    message += '\n\n';
-  }
-
   const ids = Array.isArray(chatIds) ? chatIds : [chatIds];
 
   for (const chatId of ids) {
-    try {
-      await bot.api.sendMessage(chatId, message, { parse_mode: 'HTML' });
-      console.log(
-        `📤 Уведомление в Telegram успешно отправлено в чат ${chatId}.`,
-      );
-    } catch (error) {
-      console.error(
-        `❌ Ошибка при отправке уведомления в Telegram в чат ${chatId}:`,
-        error,
-      );
+    for (const [sourceName, dramas] of newDramasBySource.entries()) {
+      for (const drama of dramas) {
+        const caption = buildCaption(drama, sourceName);
+        try {
+          if (drama.posterUrl) {
+            await bot.api.sendPhoto(chatId, drama.posterUrl, {
+              caption,
+              parse_mode: 'HTML',
+            });
+          } else {
+            await bot.api.sendMessage(chatId, caption, {
+              parse_mode: 'HTML',
+            });
+          }
+          console.log(
+            `📤 Уведомление в Telegram успешно отправлено в чат ${chatId}.`,
+          );
+        } catch (error) {
+          console.error(
+            `❌ Ошибка при отправке уведомления в Telegram в чат ${chatId}:`,
+            error,
+          );
+        }
+      }
     }
   }
 }
