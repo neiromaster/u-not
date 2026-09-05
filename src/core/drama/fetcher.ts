@@ -20,6 +20,16 @@ export interface FetchedDramas {
   dramas: Drama[];
 }
 
+export interface SourceFailure {
+  name: string;
+  error: Error;
+}
+
+export interface FetchAllResult {
+  results: FetchedDramas[];
+  failedSources: SourceFailure[];
+}
+
 /**
  * Нормализует URL постера: заменяет плейсхолдер {SIZE} на реальный размер
  * и подставляет posterBaseUrl перед относительным URL
@@ -55,9 +65,6 @@ function normalizeLink(link: string, linkBaseUrl?: string): string {
   return linkBaseUrl ? linkBaseUrl + link : link;
 }
 
-/**
- * Загружает JSON напрямую из источника
- */
 async function fetchDirect(
   source: Source,
   userAgent?: string,
@@ -80,27 +87,176 @@ async function fetchDirect(
 }
 
 /**
- * Извлекает JSON из тела ответа FlareSolverr: браузер рендерит JSON
- * как страницу, поэтому тело может быть обёрнуто в <pre>...</pre>
+ * Браузер рендерит JSON как HTML-страницу: тело заворачивается в <pre>...</pre>,
+ * а &, <, > экранируются в HTML-сущности. Возвращает объект из чистого JSON
+ * или изнутри <pre>-обёртки.
  */
 function parseFlareSolverrBody(body: string): object {
   try {
     return JSON.parse(body) as object;
   } catch {
-    const content = body.match(/<pre>([\s\S]*?)<\/pre>/)?.[1];
+    const content = body.match(/<pre>([\s\S]*)<\/pre>/)?.[1];
     if (content) {
-      return JSON.parse(content) as object;
+      try {
+        return JSON.parse(unescapeHtml(content)) as object;
+      } catch {
+        throw new Error('ответ FlareSolverr не содержит JSON');
+      }
     }
     throw new Error('ответ FlareSolverr не содержит JSON');
   }
 }
 
 /**
+ * Раскрывает HTML-сущности, которыми браузер заэкранировал текст: & → &amp;,
+ * < → &lt;, > → &gt;. &amp; заменяется последним, чтобы не двойное декодирование.
+ */
+function unescapeHtml(text: string): string {
+  return text
+    .replaceAll('&lt;', '<')
+    .replaceAll('&gt;', '>')
+    .replaceAll('&quot;', '"')
+    .replaceAll('&#39;', "'")
+    .replaceAll('&amp;', '&');
+}
+
+async function readFlareSolverrError(response: Response): Promise<string> {
+  const body = await response.text();
+  try {
+    const json = JSON.parse(body) as { error?: string };
+    if (json.error) {
+      return json.error;
+    }
+  } catch {
+    // тело не JSON — вернём его как есть
+  }
+  return body ? body.slice(0, 200) : response.statusText;
+}
+
+interface FlareSolverrSolution {
+  status?: number;
+  response?: string;
+}
+
+interface FlareSolverrResponse {
+  solution?: FlareSolverrSolution;
+  error?: string;
+}
+
+function flareBaseUrl(source: Source): string {
+  const url = source.flaresolverrUrl;
+  if (!url) {
+    throw new Error(`Источник ${source.name}: не задан flaresolverrUrl`);
+  }
+  return url.replace(/\/+$/, '');
+}
+
+/**
  * Загружает JSON через FlareSolverr — обходит антибот-защиту,
  * которая блокирует не-браузерные клиенты по TLS-fingerprint
  */
-async function fetchViaFlareSolverr(source: Source): Promise<object> {
-  const base = source.flaresolverrUrl!.replace(/\/+$/, '');
+async function fetchViaFlareSolverr(
+  source: Source,
+  userAgent?: string,
+  sessionId?: string,
+): Promise<object> {
+  const base = flareBaseUrl(source);
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+  if (source.flaresolverrApiKey) {
+    headers['X-Api-Key'] = source.flaresolverrApiKey;
+  }
+
+  const targetHeaders: Record<string, string> = {};
+  if (userAgent) {
+    targetHeaders['User-Agent'] = userAgent;
+  }
+  if (source.headers) {
+    Object.assign(targetHeaders, source.headers);
+  }
+
+  const body: Record<string, unknown> = {
+    cmd: 'request.get',
+    url: source.url,
+    maxTimeout: 60000,
+    headers: targetHeaders,
+  };
+  if (sessionId) {
+    body.session = sessionId;
+  }
+
+  const response = await fetch(`${base}/v1`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) {
+    throw new Error(
+      `FlareSolverr HTTP ${response.status} ${await readFlareSolverrError(response)}`,
+    );
+  }
+
+  let result: FlareSolverrResponse;
+  try {
+    result = (await response.json()) as FlareSolverrResponse;
+  } catch {
+    throw new Error(
+      `FlareSolverr вернул не JSON (HTTP ${response.status}). Возможно, это HTML-страница ошибки.`,
+    );
+  }
+
+  const solution = result.solution;
+  if (!solution) {
+    throw new Error(
+      `FlareSolverr вернул ошибку: ${result.error ?? 'нет solution'}`,
+    );
+  }
+
+  if (solution.status !== undefined && solution.status >= 400) {
+    throw new Error(`целевой источник ответил HTTP ${solution.status}`);
+  }
+
+  const flareBody = solution.response;
+  if (typeof flareBody !== 'string' || flareBody.length === 0) {
+    throw new Error('FlareSolverr вернул пустой ответ');
+  }
+  return parseFlareSolverrBody(flareBody);
+}
+
+function sessionKey(source: Source): string | null {
+  if (!source.flaresolverrUrl) {
+    return null;
+  }
+  return `${source.flaresolverrUrl.replace(/\/+$/, '')}|${source.flaresolverrApiKey ?? ''}`;
+}
+
+async function createFlareSolverrSession(source: Source): Promise<string> {
+  const base = flareBaseUrl(source);
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+  if (source.flaresolverrApiKey) {
+    headers['X-Api-Key'] = source.flaresolverrApiKey;
+  }
+  const sessionId = crypto.randomUUID();
+
+  const response = await fetch(`${base}/v1`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ cmd: 'sessions.create', session: sessionId }),
+  });
+  if (!response.ok) {
+    throw new Error(`FlareSolverr sessions.create HTTP ${response.status}`);
+  }
+  return sessionId;
+}
+
+async function destroyFlareSolverrSession(
+  source: Source,
+  sessionId: string,
+): Promise<void> {
+  const base = flareBaseUrl(source);
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
   };
@@ -111,26 +267,79 @@ async function fetchViaFlareSolverr(source: Source): Promise<object> {
   const response = await fetch(`${base}/v1`, {
     method: 'POST',
     headers,
-    body: JSON.stringify({
-      cmd: 'request.get',
-      url: source.url,
-      maxTimeout: 60000,
-    }),
+    body: JSON.stringify({ cmd: 'sessions.destroy', session: sessionId }),
   });
   if (!response.ok) {
-    throw new Error(
-      `FlareSolverr HTTP ${response.status} ${response.statusText}`,
+    throw new Error(`FlareSolverr sessions.destroy HTTP ${response.status}`);
+  }
+}
+
+/**
+ * Загружает дорамы из всех источников. Для источников через FlareSolverr
+ * создаётся одна сессия на сервер (переиспользуется между источниками,
+ * чтобы не поднимать браузер на каждый запрос) и уничтожается по завершении.
+ */
+export async function fetchAllSources(
+  sources: Source[],
+  userAgent?: string,
+): Promise<FetchAllResult> {
+  const flareServers = new Map<string, Source>();
+  for (const source of sources) {
+    const key = sessionKey(source);
+    if (key !== null && !flareServers.has(key)) {
+      flareServers.set(key, source);
+    }
+  }
+
+  const sessions = new Map<string, { source: Source; id: string }>();
+  for (const [key, source] of flareServers) {
+    try {
+      sessions.set(key, {
+        source,
+        id: await createFlareSolverrSession(source),
+      });
+    } catch (error) {
+      console.warn(
+        `⚠️ Не удалось создать сессию FlareSolverr для ${source.name}: ${error instanceof Error ? error.message : String(error)}. Продолжаем без неё.`,
+      );
+    }
+  }
+
+  const results: FetchedDramas[] = [];
+  const failedSources: SourceFailure[] = [];
+
+  try {
+    const outcomes = await Promise.allSettled(
+      sources.map((source) => {
+        const key = sessionKey(source);
+        const sessionId = key !== null ? sessions.get(key)?.id : undefined;
+        return fetchDramasFromSource(source, userAgent, sessionId);
+      }),
+    );
+    for (const [index, outcome] of outcomes.entries()) {
+      if (outcome.status === 'fulfilled') {
+        results.push(outcome.value);
+      } else {
+        const reason = outcome.reason;
+        failedSources.push({
+          name: sources[index]?.name ?? 'неизвестный источник',
+          error: reason instanceof Error ? reason : new Error(String(reason)),
+        });
+      }
+    }
+  } finally {
+    await Promise.allSettled(
+      [...sessions.values()].map(({ source, id }) =>
+        destroyFlareSolverrSession(source, id).catch((error: unknown) => {
+          console.warn(
+            `⚠️ Не удалось уничтожить сессию FlareSolverr: ${error instanceof Error ? error.message : String(error)}`,
+          );
+        }),
+      ),
     );
   }
 
-  const result = (await response.json()) as {
-    solution?: { response?: string };
-  };
-  const body = result.solution?.response;
-  if (typeof body !== 'string' || body.length === 0) {
-    throw new Error('FlareSolverr вернул пустой ответ');
-  }
-  return parseFlareSolverrBody(body);
+  return { results, failedSources };
 }
 
 /**
@@ -138,6 +347,7 @@ async function fetchViaFlareSolverr(source: Source): Promise<object> {
  *
  * @param source - Конфигурация источника данных
  * @param userAgent - Пользовательский агент для запроса (опционально)
+ * @param flareSolverrSessionId - ID сессии FlareSolverr (опционально)
  * @returns Объект с источником и списком дорам
  * @throws Ошибка, если запрос не удался или список дорам пуст —
  * пустой список означает, что API изменился или заблокировал запрос
@@ -152,15 +362,16 @@ async function fetchViaFlareSolverr(source: Source): Promise<object> {
  * URL постера, если тот не начинается с `http`.
  * Если задан `flaresolverrUrl`, запрос идёт через FlareSolverr
  * (обход антибот-защиты); `flaresolverrApiKey` передаётся в заголовке
- * `X-Api-Key`.
+ * `X-Api-Key`, а `headers` и верхнеуровневый `userAgent` — в целевой запрос.
  */
 export async function fetchDramasFromSource(
   source: Source,
   userAgent?: string,
+  flareSolverrSessionId?: string,
 ): Promise<FetchedDramas> {
   try {
     const json = source.flaresolverrUrl
-      ? await fetchViaFlareSolverr(source)
+      ? await fetchViaFlareSolverr(source, userAgent, flareSolverrSessionId)
       : await fetchDirect(source, userAgent);
     const objectPath = source.jsonPath.replace(/\.\w+$/, '');
     const toRelative = (path: string): string => {

@@ -7,11 +7,7 @@
 import { stdin as input, stdout as output } from 'node:process';
 import * as readline from 'node:readline/promises';
 import { type Config, validateConfig } from '@/core/config/schema';
-import {
-  type Drama,
-  type FetchedDramas,
-  fetchDramasFromSource,
-} from '@/core/drama/fetcher';
+import { type Drama, fetchAllSources } from '@/core/drama/fetcher';
 import { appendNewDramas, getExistingDramas } from '@/core/drama/storage';
 import { sendTelegramNotification } from '@/services/telegram/notifications';
 import { sendVkNotification } from '@/services/vk/notifications';
@@ -52,24 +48,7 @@ async function main() {
   const existingDramas = await getExistingDramas();
   console.log(`📝 Найдено ${existingDramas.size} дорам в текущем списке.`);
 
-  const fetchPromises = sources.map((source) =>
-    fetchDramasFromSource(source, userAgent),
-  );
-  const outcomes = await Promise.allSettled(fetchPromises);
-
-  const results: FetchedDramas[] = [];
-  const failedSources: { name: string; error: Error }[] = [];
-  for (const [index, outcome] of outcomes.entries()) {
-    if (outcome.status === 'fulfilled') {
-      results.push(outcome.value);
-    } else {
-      const reason = outcome.reason;
-      failedSources.push({
-        name: sources[index]?.name ?? 'неизвестный источник',
-        error: reason instanceof Error ? reason : new Error(String(reason)),
-      });
-    }
-  }
+  const { results, failedSources } = await fetchAllSources(sources, userAgent);
 
   console.log('\n📊 Дорамы, полученные из источников:');
   for (const result of results) {
