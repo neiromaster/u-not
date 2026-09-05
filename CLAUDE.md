@@ -35,10 +35,11 @@ src/
 - `drama-list.md` — markdown list of dramas: `## DD.MM.YYYY HH:MM` sections, `### <source>` subsections, `- <title>` lines
 - `config.json` and `drama-list.md` are in .gitignore
 - Lefthook: pre-commit = biome + typecheck, pre-push = lint + typecheck + test; run locally with `bunx lefthook run <hook>` (not in PATH); pre-commit typecheck blocks TDD red states — commit them with `--no-verify`
-- On critical error the app waits for Enter before exiting (not for CI)
+- On critical error the app waits for Enter before exiting — guarded by `process.stdin.isTTY` (CI/cron with closed stdin exits immediately with code 1; without the guard Bun's event loop drains during `rl.question` on EOF and exits 0 before `process.exit(1)` runs)
 - `bun run lint` = `biome check --write` — modifies files
 - A source may contain `posterJsonPath`, `linkJsonPath`, `linkBaseUrl`, `posterBaseUrl`, `posterSize` — poster and link are optional; `{SIZE}` in the poster URL is replaced with `posterSize` (default `400x600`); `posterBaseUrl` is prepended to a relative poster URL (e.g. wink's `images.restream-media.net`)
 - `response.json()` in Bun returns `unknown` — cast to `object` for JSONPath
+- An empty extracted list from a source is an error (the fetcher throws), not a silent zero — an empty catalogue means the API changed or blocked the request; `index.ts` uses `Promise.allSettled`, processes healthy sources, and throws at the end with the failed ones listed
 - jsonpath-plus compacts missing fields: `results.*.assets.productPoster` skips items without the field, so parallel-array extraction misaligns — query the object path once and extract title/poster/link from each item via relative paths
 - `userAgent` is an optional top-level config field, forwarded to the fetcher and to VK poster download
 

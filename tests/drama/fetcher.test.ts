@@ -229,22 +229,33 @@ test('возвращает только названия без постеров
   expect(result.dramas).toEqual([{ title: 'Дорама 1' }, { title: 'Дорама 2' }]);
 });
 
-test('возвращает пустой список при ошибке HTTP', async () => {
+test('бросает ошибку при ошибке HTTP', async () => {
   globalThis.fetch = (() =>
     Promise.resolve(
       new Response('Not Found', { status: 404 }),
     )) as unknown as typeof fetch;
 
-  const result = await fetchDramasFromSource(source);
-  expect(result.dramas).toEqual([]);
+  expect(fetchDramasFromSource(source)).rejects.toThrow(
+    'Источник Okko (https://example.com/api): HTTP 404',
+  );
 });
 
-test('возвращает пустой список при ошибке сети', async () => {
+test('бросает ошибку при ошибке сети', async () => {
   globalThis.fetch = (() =>
     Promise.reject(new Error('network error'))) as unknown as typeof fetch;
 
-  const result = await fetchDramasFromSource(source);
-  expect(result.dramas).toEqual([]);
+  expect(fetchDramasFromSource(source)).rejects.toThrow(
+    'Источник Okko (https://example.com/api): network error',
+  );
+});
+
+test('бросает ошибку, если список дорам пуст', async () => {
+  globalThis.fetch = (() =>
+    Promise.resolve(
+      new Response(JSON.stringify({ result: [] }), { status: 200 }),
+    )) as unknown as typeof fetch;
+
+  expect(fetchDramasFromSource(source)).rejects.toThrow('пустой список дорам');
 });
 
 test('передаёт User-Agent в заголовках запроса', async () => {
@@ -252,7 +263,9 @@ test('передаёт User-Agent в заголовках запроса', async
   globalThis.fetch = ((_url: string, init?: RequestInit) => {
     capturedInit = init;
     return Promise.resolve(
-      new Response(JSON.stringify({ result: [] }), { status: 200 }),
+      new Response(JSON.stringify({ result: [{ title: 'Дорама 1' }] }), {
+        status: 200,
+      }),
     );
   }) as unknown as typeof fetch;
 

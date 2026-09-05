@@ -7,7 +7,11 @@
 import { stdin as input, stdout as output } from 'node:process';
 import * as readline from 'node:readline/promises';
 import { type Config, validateConfig } from '@/core/config/schema';
-import { type Drama, fetchDramasFromSource } from '@/core/drama/fetcher';
+import {
+  type Drama,
+  type FetchedDramas,
+  fetchDramasFromSource,
+} from '@/core/drama/fetcher';
 import { appendNewDramas, getExistingDramas } from '@/core/drama/storage';
 import { sendTelegramNotification } from '@/services/telegram/notifications';
 import { sendVkNotification } from '@/services/vk/notifications';
@@ -51,12 +55,29 @@ async function main() {
   const fetchPromises = sources.map((source) =>
     fetchDramasFromSource(source, userAgent),
   );
-  const results = await Promise.all(fetchPromises);
+  const outcomes = await Promise.allSettled(fetchPromises);
+
+  const results: FetchedDramas[] = [];
+  const failedSources: { name: string; error: Error }[] = [];
+  for (const [index, outcome] of outcomes.entries()) {
+    if (outcome.status === 'fulfilled') {
+      results.push(outcome.value);
+    } else {
+      const reason = outcome.reason;
+      failedSources.push({
+        name: sources[index]?.name ?? 'неизвестный источник',
+        error: reason instanceof Error ? reason : new Error(String(reason)),
+      });
+    }
+  }
 
   console.log('\n📊 Дорамы, полученные из источников:');
   for (const result of results) {
     const sourceName = result.source.name;
     console.log(`  - ${sourceName}: ${result.dramas.length} дорам`);
+  }
+  for (const failed of failedSources) {
+    console.log(`  - ${failed.name}: ❌ ошибка`);
   }
   console.log('');
 
@@ -83,6 +104,15 @@ async function main() {
     await sendVkNotification(config.vk, newDramasBySource, userAgent);
   }
 
+  if (failedSources.length > 0) {
+    const details = failedSources
+      .map((failed) => `  - ${failed.name}: ${failed.error.message}`)
+      .join('\n');
+    throw new Error(
+      `Не удалось получить список дорам из источников:\n${details}`,
+    );
+  }
+
   console.log('🏁 Работа скрипта завершена.');
 }
 
@@ -102,9 +132,10 @@ main().catch(async (error) => {
     console.error('❌ Произошла критическая ошибка:', error);
   }
 
-  try {
+  // Ожидание Enter — только для интерактивного запуска; в CI/cron
+  // (stdin закрыт или перенаправлен) выходим сразу с ненулевым кодом
+  if (process.stdin.isTTY) {
     await waitForUserInput();
-  } finally {
-    process.exit(1);
   }
+  process.exit(1);
 });

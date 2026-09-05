@@ -61,6 +61,8 @@ function normalizeLink(link: string, linkBaseUrl?: string): string {
  * @param source - Конфигурация источника данных
  * @param userAgent - Пользовательский агент для запроса (опционально)
  * @returns Объект с источником и списком дорам
+ * @throws Ошибка, если запрос не удался или список дорам пуст —
+ * пустой список означает, что API изменился или заблокировал запрос
  *
  * @remarks
  * `posterJsonPath` и `linkJsonPath` должны разделять объектный префикс
@@ -88,10 +90,7 @@ export async function fetchDramasFromSource(
 
     const response = await fetch(source.url, { headers });
     if (!response.ok) {
-      console.error(
-        `Ошибка при загрузке ${source.url}: ${response.statusText}`,
-      );
-      return { source, dramas: [] };
+      throw new Error(`HTTP ${response.status} ${response.statusText}`);
     }
 
     const json = await response.json();
@@ -157,9 +156,17 @@ export async function fetchDramasFromSource(
       dramas.push(drama);
     }
 
+    if (dramas.length === 0) {
+      throw new Error(
+        'получен пустой список дорам — возможно, API изменился или заблокировал запрос',
+      );
+    }
+
     return { source, dramas };
   } catch (error) {
-    console.error(`Не удалось обработать источник ${source.url}:`, error);
-    return { source, dramas: [] };
+    const reason = error instanceof Error ? error.message : String(error);
+    throw new Error(`Источник ${source.name} (${source.url}): ${reason}`, {
+      cause: error,
+    });
   }
 }
