@@ -13,6 +13,10 @@ const sourceSchema = z.object({
   url: z.string().url(),
   type: z.literal('api'),
   jsonPath: z.string(),
+  posterJsonPath: z.string().optional(),
+  linkJsonPath: z.string().optional(),
+  linkBaseUrl: z.string().url().optional(),
+  posterSize: z.string().optional(),
   headers: z.record(z.string(), z.string()).optional(),
 });
 

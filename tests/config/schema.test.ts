@@ -45,6 +45,25 @@ describe('validateConfig', () => {
     expect(result.userAgent).toBe('Mozilla/5.0');
   });
 
+  test('принимает posterJsonPath, linkJsonPath, linkBaseUrl, posterSize', () => {
+    const config = {
+      sources: [
+        {
+          name: 'Amediateka',
+          url: 'https://example.com/api',
+          type: 'api',
+          jsonPath: 'results.*.title',
+          posterJsonPath: 'results.*.assets.productPoster',
+          linkJsonPath: 'results.*.webUrl',
+          linkBaseUrl: 'https://amediateka.ru',
+          posterSize: '400x600',
+        },
+      ],
+    };
+
+    expect(() => validateConfig(config)).not.toThrow();
+  });
+
   test('бросает ошибку при отсутствии sources', () => {
     expect(() => validateConfig({})).toThrow();
   });
