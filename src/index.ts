@@ -7,8 +7,7 @@
 import { stdin as input, stdout as output } from 'node:process';
 import * as readline from 'node:readline/promises';
 import { type Config, validateConfig } from '@/core/config/schema';
-import type { Drama } from '@/core/drama/fetcher';
-import { fetchDramasFromSource } from '@/core/drama/fetcher';
+import { type Drama, fetchDramasFromSource } from '@/core/drama/fetcher';
 import { appendNewDramas, getExistingDramas } from '@/core/drama/storage';
 import { sendTelegramNotification } from '@/services/telegram/notifications';
 import { sendVkNotification } from '@/services/vk/notifications';
