@@ -1,5 +1,5 @@
 {
-  "$schema": "https://biomejs.dev/schemas/2.2.6/schema.json",
+  "$schema": "https://biomejs.dev/schemas/2.5.11/schema.json",
   "vcs": {
     "enabled": false,
     "clientKind": "git",
@@ -15,7 +15,7 @@
   "linter": {
     "enabled": true,
     "rules": {
-      "recommended": true,
+      "preset": "recommended",
       "style": {
         "useNodejsImportProtocol": "off"
       }
@@ -30,7 +30,7 @@
     "enabled": true,
     "actions": {
       "source": {
-        "recommended": true
+        "preset": "recommended"
       }
     }
   }
