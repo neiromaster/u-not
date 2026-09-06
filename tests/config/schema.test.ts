@@ -164,4 +164,37 @@ describe('validateConfig', () => {
 
     expect(() => validateConfig(config)).toThrow();
   });
+
+  test('принимает errorSleepSeconds', () => {
+    const config = {
+      sources: [
+        {
+          name: 'Okko',
+          url: 'https://example.com/api',
+          type: 'api',
+          jsonPath: 'result.*.title',
+        },
+      ],
+      errorSleepSeconds: 5,
+    };
+
+    const result = validateConfig(config);
+    expect(result.errorSleepSeconds).toBe(5);
+  });
+
+  test('бросает ошибку при отрицательном errorSleepSeconds', () => {
+    const config = {
+      sources: [
+        {
+          name: 'Okko',
+          url: 'https://example.com/api',
+          type: 'api',
+          jsonPath: 'result.*.title',
+        },
+      ],
+      errorSleepSeconds: -1,
+    };
+
+    expect(() => validateConfig(config)).toThrow();
+  });
 });

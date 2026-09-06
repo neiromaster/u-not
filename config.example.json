@@ -67,6 +67,7 @@
   "flaresolverr": {
     "url": "http://192.168.0.222:30098"
   },
+  "errorSleepSeconds": 5,
   "telegram": {
     "botToken": "",
     "chatId": ["-1001234567890"]

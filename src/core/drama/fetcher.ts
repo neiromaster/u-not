@@ -8,7 +8,8 @@ import { JSONPath } from 'jsonpath-plus';
 import type { FlaresolverrConfig, Source } from '@/core/config/schema';
 
 function flaresolverrBaseUrl(flaresolverr: FlaresolverrConfig): string {
-  return flaresolverr.url.replace(/\/+$/, '');
+  // срезаем и хвостовые слэши, и уже присутствующий /v1 — иначе получится /v1/v1
+  return flaresolverr.url.replace(/\/+$/, '').replace(/\/v1$/, '');
 }
 
 const DEFAULT_POSTER_SIZE = '400x600';
@@ -35,6 +36,26 @@ export interface FetchAllResult {
 }
 
 /**
+ * Нормализует URL: абсолютные оставляет как есть (регистр схемы не важен),
+ * protocol-relative (//host) раскрывает в https, относительные склеивает
+ * с базовым доменом, добавляя недостающий слэш
+ */
+function normalizeUrl(url: string, baseUrl?: string): string {
+  const trimmed = url.trim();
+  if (/^https?:\/\//i.test(trimmed)) {
+    return trimmed;
+  }
+  if (trimmed.startsWith('//')) {
+    const protocol = baseUrl?.match(/^https?:/)?.[0] ?? 'https:';
+    return `${protocol}${trimmed}`;
+  }
+  if (baseUrl) {
+    return `${baseUrl.replace(/\/+$/, '')}/${trimmed.replace(/^\/+/, '')}`;
+  }
+  return trimmed;
+}
+
+/**
  * Нормализует URL постера: заменяет плейсхолдер {SIZE} на реальный размер
  * и подставляет posterBaseUrl перед относительным URL
  *
@@ -48,11 +69,7 @@ function normalizePosterUrl(
   posterSize: string,
   posterBaseUrl?: string,
 ): string {
-  const sized = url.replaceAll('{SIZE}', posterSize);
-  if (sized.startsWith('http')) {
-    return sized;
-  }
-  return posterBaseUrl ? posterBaseUrl + sized : sized;
+  return normalizeUrl(url.replaceAll('{SIZE}', posterSize), posterBaseUrl);
 }
 
 /**
@@ -63,10 +80,7 @@ function normalizePosterUrl(
  * @returns Полная ссылка
  */
 function normalizeLink(link: string, linkBaseUrl?: string): string {
-  if (link.startsWith('http')) {
-    return link;
-  }
-  return linkBaseUrl ? linkBaseUrl + link : link;
+  return normalizeUrl(link, linkBaseUrl);
 }
 
 async function fetchDirect(
@@ -99,7 +113,9 @@ function parseFlaresolverrBody(body: string): object {
   try {
     return JSON.parse(body) as object;
   } catch {
-    const content = body.match(/<pre>([\s\S]*)<\/pre>/)?.[1];
+    // атрибуты у <pre> (Chrome-рендер JSON-просмотрщика), регистр и
+    // нежадность до первого </pre> — иначе в JSON попадёт разметка
+    const content = body.match(/<pre[^>]*>([\s\S]*?)<\/pre\s*>/i)?.[1];
     if (content) {
       try {
         return JSON.parse(unescapeHtml(content)) as object;
@@ -127,9 +143,13 @@ function unescapeHtml(text: string): string {
 async function readFlaresolverrError(response: Response): Promise<string> {
   const body = await response.text();
   try {
-    const json = JSON.parse(body) as { error?: string };
+    // FlareSolverr отдаёт ошибки и как {error}, и как {status:"error", message}
+    const json = JSON.parse(body) as { error?: string; message?: string };
     if (json.error) {
       return json.error;
+    }
+    if (json.message) {
+      return json.message;
     }
   } catch {
     // тело не JSON — вернём его как есть
@@ -145,6 +165,7 @@ interface FlaresolverrSolution {
 interface FlaresolverrResponse {
   solution?: FlaresolverrSolution;
   error?: string;
+  message?: string;
 }
 
 /**
@@ -173,6 +194,8 @@ async function fetchViaFlaresolverr(
     Object.assign(targetHeaders, source.headers);
   }
 
+  // Мейнлайн FlareSolverr игнорирует headers в request.get — проброс
+  // заголовков работает только на форках, добавивших этот параметр
   const body: Record<string, unknown> = {
     cmd: 'request.get',
     url: source.url,
@@ -206,7 +229,7 @@ async function fetchViaFlaresolverr(
   const solution = result.solution;
   if (!solution) {
     throw new Error(
-      `Flaresolverr вернул ошибку: ${result.error ?? 'нет solution'}`,
+      `Flaresolverr вернул ошибку: ${result.error ?? result.message ?? 'нет solution'}`,
     );
   }
 
@@ -260,6 +283,8 @@ async function destroyFlaresolverrSession(
     method: 'POST',
     headers,
     body: JSON.stringify({ cmd: 'sessions.destroy', session: sessionId }),
+    // cleanup не должен вечно блокировать ран, если демон завис
+    signal: AbortSignal.timeout(5000),
   });
   if (!response.ok) {
     throw new Error(`Flaresolverr sessions.destroy HTTP ${response.status}`);
@@ -303,15 +328,26 @@ export async function fetchAllSources(
   const failedSources: SourceFailure[] = [];
 
   try {
+    // FlareSolverr сериализует навигации в рамках одной сессии: параллельные
+    // request.get не ускоряют, а могут прервать друг друга. Flare-запросы
+    // выстраиваются в цепочку, обычные идут параллельно.
+    let flareChain: Promise<unknown> = Promise.resolve();
     const outcomes = await Promise.allSettled(
-      sources.map((source) =>
-        fetchDramasFromSource(
+      sources.map((source) => {
+        if (source.flaresolverr) {
+          const run = flareChain.then(() =>
+            fetchDramasFromSource(source, userAgent, flaresolverr, sessionId),
+          );
+          flareChain = run.catch(() => {});
+          return run;
+        }
+        return fetchDramasFromSource(
           source,
           userAgent,
           flaresolverr,
-          source.flaresolverr ? sessionId : undefined,
-        ),
-      ),
+          undefined,
+        );
+      }),
     );
     for (const [index, outcome] of outcomes.entries()) {
       if (outcome.status === 'fulfilled') {

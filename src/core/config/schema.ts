@@ -45,6 +45,7 @@ export const configSchema = z
     telegram: telegramConfigSchema.optional(),
     vk: vkConfigSchema.optional(),
     userAgent: z.string().optional(),
+    errorSleepSeconds: z.number().nonnegative().optional(),
   })
   .superRefine((config, ctx) => {
     if (

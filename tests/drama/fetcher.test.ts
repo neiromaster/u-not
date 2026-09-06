@@ -608,3 +608,197 @@ test('без Flaresolverr fetchAllSources не создаёт сессий и в
   expect(results).toHaveLength(1);
   expect(results[0]?.dramas).toEqual([{ title: 'Дорама 1' }]);
 });
+
+test('раскрывает protocol-relative URL постера и ссылки', async () => {
+  globalThis.fetch = (() =>
+    Promise.resolve(
+      new Response(
+        JSON.stringify({
+          items: [
+            {
+              name: 'Дорама 1',
+              logo: '//img.example.com/400x600/poster1.jpg',
+              slug: 'dorama-1',
+            },
+          ],
+        }),
+        { status: 200 },
+      ),
+    )) as unknown as typeof fetch;
+
+  const richSource: Source = {
+    ...source,
+    jsonPath: '$.items.*.name',
+    posterJsonPath: '$.items.*.logo',
+    linkJsonPath: '$.items.*.slug',
+    posterBaseUrl: 'https://images.example.com',
+    linkBaseUrl: 'https://wink.example.com/series/',
+  };
+
+  const result = await fetchDramasFromSource(richSource);
+  expect(result.dramas).toEqual([
+    {
+      title: 'Дорама 1',
+      posterUrl: 'https://img.example.com/400x600/poster1.jpg',
+      link: 'https://wink.example.com/series/dorama-1',
+    },
+  ]);
+});
+
+test('чинит относительный URL без ведущего слэша и сохраняет регистр схемы', async () => {
+  globalThis.fetch = (() =>
+    Promise.resolve(
+      new Response(
+        JSON.stringify({
+          items: [
+            { name: 'Дорама 1', logo: 'images/poster1.jpg' },
+            { name: 'Дорама 2', logo: 'HTTPS://img.example.com/poster2.jpg' },
+          ],
+        }),
+        { status: 200 },
+      ),
+    )) as unknown as typeof fetch;
+
+  const richSource: Source = {
+    ...source,
+    jsonPath: '$.items.*.name',
+    posterJsonPath: '$.items.*.logo',
+    posterBaseUrl: 'https://images.example.com',
+  };
+
+  const result = await fetchDramasFromSource(richSource);
+  expect(result.dramas).toEqual([
+    {
+      title: 'Дорама 1',
+      posterUrl: 'https://images.example.com/images/poster1.jpg',
+    },
+    { title: 'Дорама 2', posterUrl: 'HTTPS://img.example.com/poster2.jpg' },
+  ]);
+});
+
+test('сериализует flare-запросы в одной сессии', async () => {
+  let inFlight = 0;
+  let maxInFlight = 0;
+  globalThis.fetch = ((_url: string, init?: RequestInit) => {
+    const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+    if (body.cmd === 'sessions.create' || body.cmd === 'sessions.destroy') {
+      return Promise.resolve(
+        new Response(JSON.stringify({ status: 'ok' }), { status: 200 }),
+      );
+    }
+    inFlight += 1;
+    maxInFlight = Math.max(maxInFlight, inFlight);
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        inFlight -= 1;
+        resolve(
+          new Response(
+            JSON.stringify({
+              solution: {
+                response: JSON.stringify({ result: [{ title: 'Дорама 1' }] }),
+              },
+            }),
+            { status: 200 },
+          ),
+        );
+      }, 10);
+    });
+  }) as unknown as typeof fetch;
+
+  const a: Source = { ...source, name: 'Okko', flaresolverr: true };
+  const b: Source = { ...source, name: 'Okko2', flaresolverr: true };
+
+  const { results, failedSources } = await fetchAllSources(
+    [a, b],
+    undefined,
+    flaresolverr,
+  );
+  expect(maxInFlight).toBe(1);
+  expect(failedSources).toEqual([]);
+  expect(results).toHaveLength(2);
+});
+
+test('извлекает JSON из <pre> с атрибутами', async () => {
+  globalThis.fetch = (() =>
+    Promise.resolve(
+      new Response(
+        JSON.stringify({
+          solution: {
+            response:
+              '<html><body><pre style="word-wrap: break-word; white-space: pre-wrap;">' +
+              JSON.stringify({ result: [{ title: 'Дорама 1' }] }) +
+              '</pre></body></html>',
+          },
+        }),
+        { status: 200 },
+      ),
+    )) as unknown as typeof fetch;
+
+  const flaresolverrSource: Source = {
+    ...source,
+    flaresolverr: true,
+  };
+
+  const result = await fetchDramasFromSource(
+    flaresolverrSource,
+    undefined,
+    flaresolverr,
+  );
+  expect(result.dramas).toEqual([{ title: 'Дорама 1' }]);
+});
+
+test('терпит url Flaresolverr, уже заканчивающийся на /v1', async () => {
+  let capturedUrl = '';
+  globalThis.fetch = ((url: string, init?: RequestInit) => {
+    const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+    if (body.cmd === 'sessions.create' || body.cmd === 'sessions.destroy') {
+      return Promise.resolve(
+        new Response(JSON.stringify({ status: 'ok' }), { status: 200 }),
+      );
+    }
+    capturedUrl = url;
+    return Promise.resolve(
+      new Response(
+        JSON.stringify({
+          solution: {
+            response: JSON.stringify({ result: [{ title: 'Дорама 1' }] }),
+          },
+        }),
+        { status: 200 },
+      ),
+    );
+  }) as unknown as typeof fetch;
+
+  const flaresolverrSource: Source = {
+    ...source,
+    flaresolverr: true,
+  };
+
+  await fetchAllSources([flaresolverrSource], undefined, {
+    ...flaresolverr,
+    url: 'http://localhost:8190/v1',
+  });
+  expect(capturedUrl).toBe('http://localhost:8190/v1');
+});
+
+test('показывает message из ошибки Flaresolverr без solution', async () => {
+  globalThis.fetch = (() =>
+    Promise.resolve(
+      new Response(
+        JSON.stringify({
+          status: 'error',
+          message: "Error: The session doesn't exist.",
+        }),
+        { status: 200 },
+      ),
+    )) as unknown as typeof fetch;
+
+  const flaresolverrSource: Source = {
+    ...source,
+    flaresolverr: true,
+  };
+
+  expect(
+    fetchDramasFromSource(flaresolverrSource, undefined, flaresolverr),
+  ).rejects.toThrow("The session doesn't exist.");
+});

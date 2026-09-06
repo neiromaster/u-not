@@ -121,6 +121,10 @@
     "userAgent": {
       "type": "string"
     },
+    "errorSleepSeconds": {
+      "type": "number",
+      "minimum": 0
+    },
     "$schema": {
       "type": "string"
     }

@@ -4,8 +4,6 @@
  * @module index
  */
 
-import { stdin as input, stdout as output } from 'node:process';
-import * as readline from 'node:readline/promises';
 import { type Config, validateConfig } from '@/core/config/schema';
 import { type Drama, fetchAllSources } from '@/core/drama/fetcher';
 import { appendNewDramas, getExistingDramas } from '@/core/drama/storage';
@@ -13,6 +11,10 @@ import { sendTelegramNotification } from '@/services/telegram/notifications';
 import { sendVkNotification } from '@/services/vk/notifications';
 
 const CONFIG_FILE = 'config.json';
+const DEFAULT_ERROR_SLEEP_SECONDS = 0;
+
+// ставится после загрузки конфига; если упали до неё — используем дефолт
+let errorSleepSeconds = DEFAULT_ERROR_SLEEP_SECONDS;
 
 async function loadConfig(): Promise<Config> {
   const file = Bun.file(CONFIG_FILE);
@@ -40,6 +42,7 @@ async function main() {
   console.log('🔍 Начинаем поиск новых дорам...');
 
   const config = await loadConfig();
+  errorSleepSeconds = config.errorSleepSeconds ?? DEFAULT_ERROR_SLEEP_SECONDS;
   const { sources, telegram, userAgent } = config;
   console.log(
     `📂 Конфигурация загружена. Источников для проверки: ${sources.length}`,
@@ -99,15 +102,6 @@ async function main() {
   console.log('🏁 Работа скрипта завершена.');
 }
 
-async function waitForUserInput(): Promise<void> {
-  const rl = readline.createInterface({ input, output });
-  try {
-    await rl.question('Нажмите Enter для выхода...');
-  } finally {
-    rl.close();
-  }
-}
-
 main().catch(async (error) => {
   if (error instanceof Error) {
     console.error('❌ Произошла критическая ошибка:', error.message);
@@ -115,8 +109,8 @@ main().catch(async (error) => {
     console.error('❌ Произошла критическая ошибка:', error);
   }
 
-  if (process.stdin.isTTY) {
-    await waitForUserInput();
+  if (errorSleepSeconds > 0) {
+    await Bun.sleep(errorSleepSeconds * 1000);
   }
   process.exit(1);
 });
