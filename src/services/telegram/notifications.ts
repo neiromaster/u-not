@@ -4,7 +4,7 @@
  * @module services/telegram/notifications
  */
 
-import { Bot } from 'grammy';
+import { Bot, InputFile } from 'grammy';
 import type { Config } from '@/core/config/schema';
 import type { Drama } from '@/core/drama/fetcher';
 
@@ -38,14 +38,94 @@ function buildCaption(drama: Drama, sourceName: string): string {
 }
 
 /**
+ * Скачивает постер в приложении: Telegram сам не может забрать картинку
+ * с региональных CDN (ivi/viju/wink блокируют их серверы), поэтому файл
+ * нужно отдать ему напрямую. Возвращает null, если скачать не удалось.
+ *
+ * @param posterUrl - URL постера
+ * @param userAgent - Браузерный User-Agent из конфига (опционально)
+ * @returns Байты постера или null
+ */
+async function downloadPoster(
+  posterUrl: string,
+  userAgent?: string,
+): Promise<Uint8Array | null> {
+  try {
+    const headers: Record<string, string> = {};
+    if (userAgent) {
+      headers['User-Agent'] = userAgent;
+    }
+    // без таймаута зависший CDN заблокировал бы весь цикл уведомлений
+    const response = await fetch(posterUrl, {
+      headers,
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!response.ok) {
+      return null;
+    }
+    return await response.bytes();
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Основной путь — качает постер в приложении и выгружает файлом: Telegram
+ * не достаёт региональные CDN (ivi/viju/wink). Если ни скачать, ни выгрузить
+ * не вышло — пробует отдать URL'ом (вдруг сеть Telegram его достанет).
+ *
+ * @param bot - Инстанс бота
+ * @param chatId - ID чата
+ * @param drama - Дорама с posterUrl
+ * @param caption - HTML-подпись
+ * @param userAgent - User-Agent для скачивания постера (опционально)
+ * @returns true, если фото отправлено
+ */
+async function sendPhotoWithFallback(
+  bot: Bot,
+  chatId: string | number,
+  drama: Drama,
+  caption: string,
+  userAgent?: string,
+): Promise<boolean> {
+  const posterUrl = drama.posterUrl;
+  if (!posterUrl) {
+    return false;
+  }
+  const poster = await downloadPoster(posterUrl, userAgent);
+  if (poster) {
+    try {
+      await bot.api.sendPhoto(chatId, new InputFile(poster, 'poster.jpg'), {
+        caption,
+        parse_mode: 'HTML',
+      });
+      return true;
+    } catch {
+      // файл не зашёл — пробуем отдать URL
+    }
+  }
+  try {
+    await bot.api.sendPhoto(chatId, posterUrl, {
+      caption,
+      parse_mode: 'HTML',
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Отправляет уведомление в Telegram
  *
  * @param telegram - Конфигурация Telegram
  * @param newDramasBySource - Карта с новыми дорамами по источникам
+ * @param userAgent - User-Agent для скачивания постера (опционально)
  */
 export async function sendTelegramNotification(
   telegram: Config['telegram'],
   newDramasBySource: Map<string, Drama[]>,
+  userAgent?: string,
 ): Promise<void> {
   if (!telegram) {
     console.log(
@@ -78,17 +158,16 @@ export async function sendTelegramNotification(
           bot.api.sendMessage(chatId, caption, { parse_mode: 'HTML' });
         try {
           if (drama.posterUrl) {
-            try {
-              await bot.api.sendPhoto(chatId, drama.posterUrl, {
-                caption,
-                parse_mode: 'HTML',
-              });
-            } catch (photoError) {
-              // Если фото не отправилось (например, Telegram не смог загрузить
-              // постер), отправляем текст без фото — не теряем уведомление.
+            const sent = await sendPhotoWithFallback(
+              bot,
+              chatId,
+              drama,
+              caption,
+              userAgent,
+            );
+            if (!sent) {
               console.warn(
-                `⚠️ Не удалось отправить фото в чат ${chatId}, отправляю текст:`,
-                photoError,
+                `⚠️ Не удалось отправить фото в чат ${chatId}, отправляю текст.`,
               );
               await sendText();
             }

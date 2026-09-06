@@ -21,11 +21,21 @@ const sendPhoto = mock(
   ) => ({}),
 );
 
+class InputFile {
+  constructor(
+    public file: unknown,
+    public filename?: string,
+  ) {}
+}
+
 mock.module('grammy', () => ({
   Bot: class {
     api = { sendMessage, sendPhoto };
   },
+  InputFile,
 }));
+
+const originalFetch = globalThis.fetch;
 
 const { sendTelegramNotification } = await import(
   '@/services/telegram/notifications'
@@ -34,6 +44,7 @@ const { sendTelegramNotification } = await import(
 afterEach(() => {
   sendMessage.mockClear();
   sendPhoto.mockClear();
+  globalThis.fetch = originalFetch;
 });
 
 describe('sendTelegramNotification', () => {
@@ -52,6 +63,11 @@ describe('sendTelegramNotification', () => {
   });
 
   test('отправляет фото с постером и caption', async () => {
+    globalThis.fetch = (() =>
+      Promise.resolve(
+        new Response(new Blob(['fake-image']), { status: 200 }),
+      )) as unknown as typeof fetch;
+
     await sendTelegramNotification(
       { botToken: 'token', chatId: '-1001' },
       new Map([
@@ -69,9 +85,14 @@ describe('sendTelegramNotification', () => {
     );
 
     expect(sendPhoto).toHaveBeenCalledTimes(1);
-    expect(sendPhoto).toHaveBeenCalledWith(
-      '-1001',
-      'https://img.example.com/poster1.jpg',
+    const callArgs = sendPhoto.mock.calls[0] as [
+      string,
+      unknown,
+      { caption: string; parse_mode: string },
+    ];
+    expect(callArgs[0]).toBe('-1001');
+    expect(callArgs[1]).toBeInstanceOf(InputFile);
+    expect(callArgs[2]).toEqual(
       expect.objectContaining({
         parse_mode: 'HTML',
         caption: expect.stringContaining('Дорама 1'),
@@ -80,8 +101,12 @@ describe('sendTelegramNotification', () => {
     expect(sendMessage).not.toHaveBeenCalled();
   });
 
-  test('отправляет текст, если фото не отправилось', async () => {
+  test('отправляет текст, если фото не отправилось и постер не скачался', async () => {
     sendPhoto.mockRejectedValueOnce(new Error('photo failed'));
+    globalThis.fetch = (() =>
+      Promise.resolve(
+        new Response('Not Found', { status: 404 }),
+      )) as unknown as typeof fetch;
 
     await sendTelegramNotification(
       { botToken: 'token', chatId: '-1001' },
@@ -99,6 +124,103 @@ describe('sendTelegramNotification', () => {
     );
 
     expect(sendPhoto).toHaveBeenCalledTimes(1);
+    expect(sendMessage).toHaveBeenCalledTimes(1);
+    expect(sendMessage).toHaveBeenCalledWith(
+      '-1001',
+      expect.stringContaining('Дорама 1'),
+      { parse_mode: 'HTML' },
+    );
+  });
+
+  test('скачивает постер и выгружает файлом, передавая User-Agent', async () => {
+    let posterFetchHeaders: Record<string, string> | undefined;
+    globalThis.fetch = ((_url: string, init?: RequestInit) => {
+      posterFetchHeaders = init?.headers as Record<string, string> | undefined;
+      return Promise.resolve(
+        new Response(new Blob(['fake-image']), { status: 200 }),
+      );
+    }) as unknown as typeof fetch;
+
+    await sendTelegramNotification(
+      { botToken: 'token', chatId: '-1001' },
+      new Map([
+        [
+          'ivi',
+          [
+            {
+              title: 'Дорама 1',
+              posterUrl: 'https://thumbs.example.com/poster1.jpg',
+            },
+          ],
+        ],
+      ]),
+      'TestAgent/1.0',
+    );
+
+    expect(sendPhoto).toHaveBeenCalledTimes(1);
+    const call = sendPhoto.mock.calls[0] as [string, unknown, unknown];
+    expect(call[0]).toBe('-1001');
+    expect(call[1]).toBeInstanceOf(InputFile);
+    expect(sendMessage).not.toHaveBeenCalled();
+    expect(posterFetchHeaders).toEqual({ 'User-Agent': 'TestAgent/1.0' });
+  });
+
+  test('пробует URL, если файл не прошёл, но постер скачался', async () => {
+    sendPhoto.mockRejectedValueOnce(new Error('upload failed'));
+    globalThis.fetch = (() =>
+      Promise.resolve(
+        new Response(new Blob(['fake-image']), { status: 200 }),
+      )) as unknown as typeof fetch;
+
+    await sendTelegramNotification(
+      { botToken: 'token', chatId: '-1001' },
+      new Map([
+        [
+          'ivi',
+          [
+            {
+              title: 'Дорама 1',
+              posterUrl: 'https://thumbs.example.com/poster1.jpg',
+            },
+          ],
+        ],
+      ]),
+    );
+
+    expect(sendPhoto).toHaveBeenCalledTimes(2);
+    const firstCall = sendPhoto.mock.calls[0] as [string, unknown, unknown];
+    const secondCall = sendPhoto.mock.calls[1] as [string, unknown, unknown];
+    expect(firstCall[1]).toBeInstanceOf(InputFile);
+    expect(secondCall[1]).toBe('https://thumbs.example.com/poster1.jpg');
+    expect(sendMessage).not.toHaveBeenCalled();
+  });
+
+  test('отправляет текст, если постер не прошёл ни URL, ни файлом', async () => {
+    sendPhoto.mockRejectedValueOnce(
+      new Error('failed to get HTTP URL content'),
+    );
+    sendPhoto.mockRejectedValueOnce(new Error('upload failed'));
+    globalThis.fetch = (() =>
+      Promise.resolve(
+        new Response(new Blob(['fake-image']), { status: 200 }),
+      )) as unknown as typeof fetch;
+
+    await sendTelegramNotification(
+      { botToken: 'token', chatId: '-1001' },
+      new Map([
+        [
+          'ivi',
+          [
+            {
+              title: 'Дорама 1',
+              posterUrl: 'https://thumbs.example.com/poster1.jpg',
+            },
+          ],
+        ],
+      ]),
+    );
+
+    expect(sendPhoto).toHaveBeenCalledTimes(2);
     expect(sendMessage).toHaveBeenCalledTimes(1);
     expect(sendMessage).toHaveBeenCalledWith(
       '-1001',
@@ -123,6 +245,11 @@ describe('sendTelegramNotification', () => {
   });
 
   test('экранирует спецсимволы HTML в caption', async () => {
+    globalThis.fetch = (() =>
+      Promise.resolve(
+        new Response(new Blob(['fake-image']), { status: 200 }),
+      )) as unknown as typeof fetch;
+
     await sendTelegramNotification(
       { botToken: 'token', chatId: '-1001' },
       new Map([

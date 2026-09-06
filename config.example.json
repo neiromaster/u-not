@@ -35,7 +35,7 @@
       "jsonPath": "$.*.title",
       "posterJsonPath": "$.*.poster",
       "linkJsonPath": "$.*.slug",
-      "linkBaseUrl": "https://viju.ru/serials/",
+      "linkBaseUrl": "https://viju.ru/series/",
       "headers": {
         "Visitorid": "YOUR_VIJU_VISITORID"
       }

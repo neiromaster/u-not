@@ -86,8 +86,10 @@ async function main() {
     console.log('✅ Новых дорам не найдено.');
   } else {
     await appendNewDramas(newDramasBySource);
-    await sendTelegramNotification(telegram, newDramasBySource);
-    await sendVkNotification(config.vk, newDramasBySource, userAgent);
+    await sendTelegramNotification(telegram, newDramasBySource, userAgent);
+    if (config.vk?.accessToken) {
+      await sendVkNotification(config.vk, newDramasBySource, userAgent);
+    }
   }
 
   if (failedSources.length > 0) {
