@@ -220,7 +220,7 @@ describe('sendVkNotification', () => {
     ).resolves.toBeUndefined();
   });
 
-  test('нейтрализует VK-разметку в названии и источнике', async () => {
+  test('отправляет сообщение без VK-разметки', async () => {
     let sendBody: URLSearchParams | undefined;
     globalThis.fetch = ((url: string, init?: RequestInit) => {
       if (url.endsWith('messages.send')) {
@@ -234,12 +234,15 @@ describe('sendVkNotification', () => {
 
     await sendVkNotification(
       { accessToken: 'token', peerId: 2000000001 },
-      new Map([['Okko', [{ title: 'Дорама **Супер** [смотреть|тут]' }]]]),
+      new Map([
+        ['Okko', [{ title: 'Дорама 1', link: 'https://example.com/watch/1' }]],
+      ]),
     );
 
     const message = sendBody?.get('message') ?? '';
-    expect(message).toContain('Дорама *Супер* (смотреть|тут)');
-    expect(message).not.toContain('Дорама **Супер**');
+    expect(message).toBe('Дорама 1\nOkko\nhttps://example.com/watch/1');
+    expect(message).not.toContain('**');
+    expect(message).not.toContain('[Смотреть]');
   });
 
   test('отправляет текст без фото при HTTP-ошибке аплоада', async () => {
@@ -287,6 +290,132 @@ describe('sendVkNotification', () => {
       ]),
     );
 
+    expect(sendBody?.get('attachment')).toBeNull();
+    expect(sendBody?.get('message')).toContain('Дорама 1');
+  });
+
+  test('повторяет загрузку, если upload-сервер вернул пустой photo', async () => {
+    let sendBody: URLSearchParams | undefined;
+    let uploadAttempts = 0;
+    globalThis.fetch = ((url: string, init?: RequestInit) => {
+      if (url === 'https://img.example.com/poster1.jpg') {
+        return Promise.resolve(
+          new Response(new Blob(['fake-image']), { status: 200 }),
+        );
+      }
+      if (url === 'https://upload.example.com/') {
+        uploadAttempts++;
+        return Promise.resolve(
+          new Response(
+            JSON.stringify(
+              uploadAttempts === 1
+                ? { server: 1, photo: '', hash: 'hash' }
+                : { server: 1, photo: 'photo', hash: 'hash' },
+            ),
+            { status: 200 },
+          ),
+        );
+      }
+      if (url.endsWith('photos.getMessagesUploadServer')) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              response: { upload_url: 'https://upload.example.com/' },
+            }),
+            { status: 200 },
+          ),
+        );
+      }
+      if (url.endsWith('photos.saveMessagesPhoto')) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              response: [{ owner_id: -1, id: 1, access_key: 'key' }],
+            }),
+            { status: 200 },
+          ),
+        );
+      }
+      if (url.endsWith('messages.send')) {
+        sendBody = init?.body as URLSearchParams;
+        return Promise.resolve(
+          new Response(JSON.stringify({ response: 1 }), { status: 200 }),
+        );
+      }
+      return Promise.resolve(new Response('{}', { status: 200 }));
+    }) as unknown as typeof fetch;
+
+    await sendVkNotification(
+      { accessToken: 'token', peerId: 2000000001 },
+      new Map([
+        [
+          'Okko',
+          [
+            {
+              title: 'Дорама 1',
+              posterUrl: 'https://img.example.com/poster1.jpg',
+            },
+          ],
+        ],
+      ]),
+    );
+
+    expect(uploadAttempts).toBe(2);
+    expect(sendBody?.get('attachment')).toBe('photo-1_1_key');
+  });
+
+  test('отправляет текст, если upload-сервер всегда возвращает пустой photo', async () => {
+    let sendBody: URLSearchParams | undefined;
+    let uploadAttempts = 0;
+    globalThis.fetch = ((url: string, init?: RequestInit) => {
+      if (url === 'https://img.example.com/poster1.jpg') {
+        return Promise.resolve(
+          new Response(new Blob(['fake-image']), { status: 200 }),
+        );
+      }
+      if (url === 'https://upload.example.com/') {
+        uploadAttempts++;
+        return Promise.resolve(
+          new Response(JSON.stringify({ server: 1, photo: '', hash: 'hash' }), {
+            status: 200,
+          }),
+        );
+      }
+      if (url.endsWith('photos.getMessagesUploadServer')) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              response: { upload_url: 'https://upload.example.com/' },
+            }),
+            { status: 200 },
+          ),
+        );
+      }
+      if (url.endsWith('messages.send')) {
+        sendBody = init?.body as URLSearchParams;
+        return Promise.resolve(
+          new Response(JSON.stringify({ response: 1 }), { status: 200 }),
+        );
+      }
+      return Promise.resolve(new Response('{}', { status: 200 }));
+    }) as unknown as typeof fetch;
+
+    await sendVkNotification(
+      { accessToken: 'token', peerId: 2000000001 },
+      new Map([
+        [
+          'Okko',
+          [
+            {
+              title: 'Дорама 1',
+              posterUrl: 'https://img.example.com/poster1.jpg',
+            },
+          ],
+        ],
+      ]),
+    );
+
+    expect(uploadAttempts).toBe(4);
     expect(sendBody?.get('attachment')).toBeNull();
     expect(sendBody?.get('message')).toContain('Дорама 1');
   });

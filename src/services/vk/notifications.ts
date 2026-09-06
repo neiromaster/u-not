@@ -96,54 +96,72 @@ async function uploadPhotoToVk(
     if (userAgent) {
       headers['User-Agent'] = userAgent;
     }
-    const posterResponse = await fetch(posterUrl, { headers });
+    // без таймаута зависший CDN заблокировал бы весь цикл уведомлений
+    const posterResponse = await fetch(posterUrl, {
+      headers,
+      signal: AbortSignal.timeout(15000),
+    });
     if (!posterResponse.ok) {
       return null;
     }
     const blob = await posterResponse.blob();
 
-    const uploadServer = (await callVkApi(
-      'photos.getMessagesUploadServer',
-      accessToken,
-      apiVersion,
-      { peer_id: String(peerId) },
-    )) as { upload_url: string };
+    // VK периодически отклоняет валидные файлы (пустой photo) — повторяем несколько раз
+    for (let attempt = 0; attempt < 4; attempt++) {
+      try {
+        const uploadServer = (await callVkApi(
+          'photos.getMessagesUploadServer',
+          accessToken,
+          apiVersion,
+          { peer_id: String(peerId) },
+        )) as { upload_url: string };
 
-    const form = new FormData();
-    // Bun-овский Blob не совпадает с DOM-типом Blob из bun-types — нужен каст
-    form.append('photo', blob as unknown as Blob, 'poster.jpg');
-    const uploadResponse = await fetch(uploadServer.upload_url, {
-      method: 'POST',
-      body: form,
-    });
-    if (!uploadResponse.ok) {
-      console.error(
-        `Ошибка при загрузке фото в VK: HTTP ${uploadResponse.status}`,
-      );
-      return null;
+        const form = new FormData();
+        // Bun-овский Blob не совпадает с DOM-типом Blob из bun-types — нужен каст
+        form.append('photo', blob as unknown as Blob, 'poster.jpg');
+        const uploadResponse = await fetch(uploadServer.upload_url, {
+          method: 'POST',
+          body: form,
+        });
+        if (!uploadResponse.ok) {
+          console.error(
+            `Ошибка при загрузке фото в VK: HTTP ${uploadResponse.status}`,
+          );
+          continue;
+        }
+        const uploadJson = (await uploadResponse.json()) as {
+          server: number;
+          photo: string;
+          hash: string;
+        };
+        if (!uploadJson.photo) {
+          console.error(
+            `VK не принял фото (пустой photo): ${JSON.stringify(uploadJson)}`,
+          );
+          continue;
+        }
+
+        const saved = (await callVkApi(
+          'photos.saveMessagesPhoto',
+          accessToken,
+          apiVersion,
+          {
+            server: String(uploadJson.server),
+            photo: uploadJson.photo,
+            hash: uploadJson.hash,
+          },
+        )) as Array<{ owner_id: number; id: number; access_key: string }>;
+
+        const photo = saved[0];
+        if (!photo) {
+          return null;
+        }
+        return `photo${photo.owner_id}_${photo.id}_${photo.access_key}`;
+      } catch (error) {
+        console.error('Ошибка при загрузке постера в VK:', error);
+      }
     }
-    const uploadJson = (await uploadResponse.json()) as {
-      server: number;
-      photo: string;
-      hash: string;
-    };
-
-    const saved = (await callVkApi(
-      'photos.saveMessagesPhoto',
-      accessToken,
-      apiVersion,
-      {
-        server: String(uploadJson.server),
-        photo: uploadJson.photo,
-        hash: uploadJson.hash,
-      },
-    )) as Array<{ owner_id: number; id: number; access_key: string }>;
-
-    const photo = saved[0];
-    if (!photo) {
-      return null;
-    }
-    return `photo${photo.owner_id}_${photo.id}_${photo.access_key}`;
+    return null;
   } catch (error) {
     console.error('Ошибка при загрузке постера в VK:', error);
     return null;
@@ -151,31 +169,19 @@ async function uploadPhotoToVk(
 }
 
 /**
- * Нейтрализует VK-разметку в тексте, чтобы название дорамы или источника
- * не сломало форматирование сообщения (жирный `**`, курсив `__`, ссылки `[url|text]`)
- *
- * @param value - Исходный текст
- * @returns Текст без активной VK-разметки
- */
-function neutralizeVkMarkdown(value: string): string {
-  return value
-    .replaceAll('**', '*')
-    .replaceAll('__', '_')
-    .replaceAll('[', '(')
-    .replaceAll(']', ')');
-}
-
-/**
  * Собирает текст сообщения
+ *
+ * VK не рендерит `**bold**`/`[url|text]` в сообщениях сообществ — показывает
+ * как есть, поэтому шлём обычный текст, а ссылку VK сам делает кликабельной.
  *
  * @param drama - Дорама
  * @param sourceName - Название источника
  * @returns Текст сообщения
  */
 function buildMessage(drama: Drama, sourceName: string): string {
-  let message = `**${neutralizeVkMarkdown(drama.title)}**\n${neutralizeVkMarkdown(sourceName)}`;
+  let message = `${drama.title}\n${sourceName}`;
   if (drama.link) {
-    message += `\n[${drama.link}|Смотреть]`;
+    message += `\n${drama.link}`;
   }
   return message;
 }
