@@ -25,6 +25,6 @@
   "dependencies": {
     "grammy": "^1.46.0",
     "jsonpath-plus": "^10.4.0",
-    "zod": "^4.5.4"
+    "zod": "^4.6.1"
   }
 }
